@@ -11,14 +11,23 @@ export function CalendarScreen() {
   const events = usePlannerStore((s) => s.events);
   const addEvent = usePlannerStore((s) => s.addEvent);
   const [title, setTitle] = useState('');
+  const [view, setView] = useState<'Month' | 'Week' | 'Agenda'>('Week');
+
   return (
-    <ScreenShell title="Calendar" subtitle="Live event list with creation and detail navigation.">
+    <ScreenShell title="Calendar" subtitle="Time-based planning with a small internal mode switch instead of extra global tabs.">
       <Panel>
-        <SectionTitle title="Week view" />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['Month', 'Week', 'Agenda'] as const).map((item) => (
+            <Pressable key={item} onPress={() => setView(item)} style={uiStyles.chip}>
+              <Text style={uiStyles.chipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
+        <SectionTitle title={`${view} view`} />
         {events.map((event) => (
           <Pressable key={event.id} onPress={() => navigation.navigate('EventDetail', { eventId: event.id })}>
             <Text style={uiStyles.itemTitle}>{event.title}</Text>
-            <Text style={uiStyles.itemMeta}>{event.startAt} - {event.endAt} • {event.source}</Text>
+            <Text style={uiStyles.itemMeta}>{event.startAt} - {event.endAt} | {event.source}</Text>
           </Pressable>
         ))}
       </Panel>

@@ -14,21 +14,29 @@ export function AICopilotScreen() {
   const quickAIAction = usePlannerStore((s) => s.quickAIAction);
   const sendAIMessage = usePlannerStore((s) => s.sendAIMessage);
   const [draft, setDraft] = useState('');
+  const [view, setView] = useState<'Copilot' | 'Suggestions' | 'Planner'>('Copilot');
 
   return (
-    <ScreenShell title="AI Copilot" subtitle="Quick actions and chat now write to real local conversation state.">
+    <ScreenShell title="AI Copilot" subtitle="The assistant stays present but understated, surfacing only when it helps.">
       <Panel>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {(['Copilot', 'Suggestions', 'Planner'] as const).map((item) => (
+            <Pressable key={item} onPress={() => setView(item)} style={uiStyles.chip}>
+              <Text style={uiStyles.chipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
         <SectionTitle title="Quick actions" action="Insights" onPress={() => navigation.navigate('Insights')} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {quickActions.map((action) => (
-            <Pressable key={action} onPress={() => quickAIAction(action)} style={{ paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderRadius: 4 }}>
-              <Text style={uiStyles.itemMeta}>{action}</Text>
+            <Pressable key={action} onPress={() => quickAIAction(action)} style={uiStyles.chip}>
+              <Text style={uiStyles.chipText}>{action}</Text>
             </Pressable>
           ))}
         </View>
       </Panel>
       <Panel>
-        <SectionTitle title="Conversation" action="Weekly recap" onPress={() => navigation.navigate('WeeklyRecap')} />
+        <SectionTitle title={`Conversation | ${view}`} action="Weekly recap" onPress={() => navigation.navigate('WeeklyRecap')} />
         {messages.slice(-6).map((message) => (
           <View key={message.id}>
             <Text style={uiStyles.itemTitle}>{message.role === 'assistant' ? 'Copilot' : 'You'}</Text>

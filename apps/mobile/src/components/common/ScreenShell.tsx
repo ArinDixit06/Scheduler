@@ -23,30 +23,35 @@ const styles = StyleSheet.create({
     backgroundColor: palette.ash
   },
   hero: {
-    minHeight: 180,
-    borderRadius: 12,
+    minHeight: 164,
+    borderRadius: 24,
     padding: 24,
     justifyContent: 'flex-end',
     backgroundColor: palette.white,
     borderWidth: 1,
-    borderColor: '#EEEEEE'
+    borderColor: '#EEF1F6',
+    shadowColor: '#101828',
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 2
   },
   eyebrow: {
     color: palette.pewter,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     marginBottom: 10
   },
   title: {
-    color: palette.dark,
-    fontSize: 32,
-    fontWeight: '500',
-    lineHeight: 38
+    color: palette.navy,
+    fontSize: 30,
+    fontWeight: '700',
+    lineHeight: 36
   },
   subtitle: {
     color: palette.graphite,
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 21,
     marginTop: 10
   },
   content: {

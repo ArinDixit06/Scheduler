@@ -57,15 +57,15 @@ export function TeslaInput({
 
 export const uiStyles = StyleSheet.create({
   body: { color: palette.graphite, fontSize: 14, lineHeight: 20 },
-  itemTitle: { color: palette.dark, fontSize: 16, fontWeight: '500' },
+  itemTitle: { color: palette.navy, fontSize: 16, fontWeight: '600' },
   itemMeta: { color: palette.pewter, fontSize: 13, lineHeight: 18 },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   chip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderWidth: 1,
     borderColor: palette.line,
-    borderRadius: 4
+    borderRadius: 999
   },
   chipText: { color: palette.graphite, fontSize: 12 }
 });
@@ -73,11 +73,16 @@ export const uiStyles = StyleSheet.create({
 const styles = StyleSheet.create({
   panel: {
     backgroundColor: palette.white,
-    borderRadius: 12,
-    padding: 16,
-    gap: 10,
+    borderRadius: 22,
+    padding: 18,
+    gap: 12,
     borderWidth: 1,
-    borderColor: '#EEEEEE'
+    borderColor: '#EEF1F6',
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -86,8 +91,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '500',
-    color: palette.dark
+    fontWeight: '600',
+    color: palette.navy
   },
   link: {
     color: palette.blue,
@@ -95,10 +100,10 @@ const styles = StyleSheet.create({
     fontWeight: '500'
   },
   button: {
-    minHeight: 40,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 4,
+    minHeight: 46,
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1
@@ -122,12 +127,12 @@ const styles = StyleSheet.create({
     color: palette.graphite
   },
   input: {
-    minHeight: 42,
+    minHeight: 46,
     borderColor: palette.line,
     borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    paddingHorizontal: 14,
     color: palette.dark,
-    backgroundColor: palette.white
+    backgroundColor: palette.mist
   }
 });

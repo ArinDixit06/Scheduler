@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { ScreenShell } from '../../components/common/ScreenShell';
@@ -13,6 +13,7 @@ export function FocusScreen() {
   const focusHistory = usePlannerStore((s) => s.focusHistory);
   const allTasks = usePlannerStore((s) => s.tasks);
   const [selectedMode, setSelectedMode] = useState<'POMODORO' | 'DEEP_WORK' | 'FLOW'>('POMODORO');
+  const [view, setView] = useState<'Sessions' | 'Goals' | 'Timer'>('Timer');
   const tasks = allTasks.filter((task) => task.status !== 'DONE');
 
   useEffect(() => {
@@ -24,12 +25,19 @@ export function FocusScreen() {
   }, [active, tick]);
 
   return (
-    <ScreenShell title="Focus" subtitle="Mode selection, active countdown state, and saved history are now live.">
+    <ScreenShell title="Focus" subtitle="Deep work stays tucked inside one section, with quiet internal modes for timer, sessions, and goals.">
       <Panel>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['Sessions', 'Goals', 'Timer'] as const).map((item) => (
+            <Pressable key={item} onPress={() => setView(item)} style={uiStyles.chip}>
+              <Text style={uiStyles.chipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
         <SectionTitle title="Active session" />
         <Text style={uiStyles.body}>Mode: {active ? mode : selectedMode}</Text>
         <Text style={uiStyles.body}>Task: {taskTitle ?? tasks[0]?.title ?? 'Choose a task'}</Text>
-        <Text style={uiStyles.body}>Minutes left: {minutesLeft}</Text>
+        <Text style={uiStyles.body}>Minutes left: {minutesLeft} | View: {view}</Text>
         <TeslaButton
           label="Start session"
           onPress={() => {

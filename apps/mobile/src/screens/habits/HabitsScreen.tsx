@@ -12,15 +12,24 @@ export function HabitsScreen() {
   const toggleHabit = usePlannerStore((s) => s.toggleHabit);
   const addHabit = usePlannerStore((s) => s.addHabit);
   const [title, setTitle] = useState('');
+  const [view, setView] = useState<'Active' | 'Streaks' | 'History'>('Active');
+
   return (
-    <ScreenShell title="Habits" subtitle="Habit cards now toggle completion and open detail history.">
+    <ScreenShell title="Habits" subtitle="A lighter module for continuity, consistency, and low-pressure progress.">
       <Panel>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['Active', 'Streaks', 'History'] as const).map((item) => (
+            <Pressable key={item} onPress={() => setView(item)} style={uiStyles.chip}>
+              <Text style={uiStyles.chipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
         <SectionTitle title="Today" />
         {habits.map((habit) => (
           <View key={habit.id} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Pressable onPress={() => navigation.navigate('HabitDetail', { habitId: habit.id })} style={{ flex: 1 }}>
               <Text style={uiStyles.itemTitle}>{habit.title}</Text>
-              <Text style={uiStyles.itemMeta}>Streak {habit.streak} • Reminder {habit.reminderTime}</Text>
+              <Text style={uiStyles.itemMeta}>Streak {habit.streak} | Reminder {habit.reminderTime} | {view}</Text>
             </Pressable>
             <TeslaButton label={habit.completedToday ? 'Undo' : 'Log'} onPress={() => toggleHabit(habit.id)} />
           </View>

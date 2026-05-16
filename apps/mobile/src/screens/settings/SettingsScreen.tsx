@@ -1,4 +1,5 @@
-import { Pressable, Text } from 'react-native';
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { ScreenShell } from '../../components/common/ScreenShell';
@@ -11,12 +12,20 @@ export function SettingsScreen() {
   const signOut = useAuthStore((s) => s.signOut);
   const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
+  const [view, setView] = useState<'Account' | 'Notifications' | 'Appearance'>('Appearance');
 
   return (
-    <ScreenShell title="Settings" subtitle="Theme controls, analytics, notifications, integrations, and sign-out now work.">
+    <ScreenShell title="Settings" subtitle="Less frequent controls stay here so the main product surfaces remain calm.">
       <Panel>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {(['Account', 'Notifications', 'Appearance'] as const).map((item) => (
+            <Pressable key={item} onPress={() => setView(item)} style={uiStyles.chip}>
+              <Text style={uiStyles.chipText}>{item}</Text>
+            </Pressable>
+          ))}
+        </View>
         <SectionTitle title="Theme" />
-        <Text style={uiStyles.body}>Current mode: {theme}</Text>
+        <Text style={uiStyles.body}>Current mode: {theme} | Section: {view}</Text>
         <TeslaButton label="Light" onPress={() => setTheme('light')} />
         <TeslaButton label="Dark" variant="secondary" onPress={() => setTheme('dark')} />
       </Panel>
