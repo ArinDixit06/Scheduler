@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "APEX",
+    "slug": "apex",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "jsEngine": "hermes",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  }
+}

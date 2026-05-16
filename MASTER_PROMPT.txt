@@ -1,0 +1,615 @@
+================================================================================
+  MASTER PROMPT — ULTIMATE PRODUCTIVITY APP
+  Stack: React Native (Mobile) + Node.js + Express (Backend)
+  Use this prompt with any AI coding assistant (Claude, GPT-4, Cursor, etc.)
+================================================================================
+
+You are a senior full-stack engineer and product architect. You are building
+"APEX" — an ultimate personal productivity application. The stack is:
+
+  FRONTEND  : React Native (Expo SDK 54 only), TypeScript, Zustand (state),
+              React Query (server state), React Navigation v6, NativeWind
+              (Tailwind for RN), react-native-reanimated 3, react-native-
+              gesture-handler, react-native-calendars, react-native-gifted-chat
+  BACKEND   : Node.js 20 LTS, Express 4, TypeScript, Prisma ORM,
+              PostgreSQL (primary DB), Redis (cache + queues),
+              BullMQ (job queues), Socket.IO (real-time), JWT + refresh tokens,
+              Zod (validation), Winston (logging), Jest (testing)
+  AI LAYER  : Anthropic Claude API (claude-sonnet-4-20250514) for all AI
+              features via a dedicated AI microservice
+  STORAGE   : AWS S3 (files/attachments), Cloudinary (images)
+  PUSH      : Firebase Cloud Messaging (FCM) for push notifications
+  OAUTH     : Google, Apple, Microsoft (Passport.js strategies)
+
+--------------------------------------------------------------------------------
+SECTION 1 — PROJECT SCAFFOLD
+--------------------------------------------------------------------------------
+
+Generate the complete monorepo folder structure using the following layout:
+
+  apex/
+  ├── apps/
+  │   ├── mobile/          (React Native Expo)
+  │   └── backend/         (Express API server)
+  ├── packages/
+  │   ├── shared-types/    (TypeScript interfaces shared across apps)
+  │   ├── shared-utils/    (date helpers, validators, formatters)
+  │   └── ai-service/      (Claude API wrapper + all AI logic)
+  ├── prisma/
+  │   └── schema.prisma    (full database schema)
+  ├── docker-compose.yml
+  ├── .env.example
+  └── package.json         (Turborepo workspace root)
+
+Include:
+- Full tsconfig.json for each workspace
+- ESLint + Prettier config
+- Husky pre-commit hooks
+- Full docker-compose with postgres, redis, and the api service
+- .env.example with every required environment variable documented
+
+
+--------------------------------------------------------------------------------
+SECTION 2 — DATABASE SCHEMA (prisma/schema.prisma)
+--------------------------------------------------------------------------------
+
+Generate the complete Prisma schema with all models, relations, indexes, and
+enums. Include every field listed below.
+
+Models required:
+
+  User
+    - id, email, name, avatarUrl, passwordHash (nullable for OAuth)
+    - timezone, locale, workingHoursStart, workingHoursEnd
+    - energyPeakStart, energyPeakEnd  (user's peak focus hours)
+    - createdAt, updatedAt, lastLoginAt
+    - Relations: tasks, projects, habits, events, integrations,
+                 notificationSettings, sessions, aiInsights
+
+  Task
+    - id, title, description, status (INBOX/TODO/IN_PROGRESS/DONE/ARCHIVED)
+    - priority (AI_SCORED 0-100), manualPriority (LOW/MEDIUM/HIGH/URGENT)
+    - dueDate, estimatedMinutes, actualMinutes
+    - projectId (nullable), parentTaskId (nullable, for subtasks)
+    - recurringRuleId (nullable), tags (string[])
+    - aiSummary, aiNextStep (nullable)
+    - completedAt, createdAt, updatedAt
+    - Relations: subtasks, project, dependencies, attachments, comments
+
+  Project
+    - id, name, description, color, icon
+    - status (ACTIVE/ON_HOLD/COMPLETED/ARCHIVED)
+    - ownerId, startDate, targetDate
+    - Relations: tasks, members, milestones
+
+  CalendarEvent
+    - id, title, description, location, meetingUrl
+    - startAt, endAt, allDay, timezone
+    - externalId (from Google/Outlook), externalCalendarId
+    - source (GOOGLE/OUTLOOK/APPLE/INTERNAL)
+    - aiPrepBrief (nullable), transcriptId (nullable)
+    - attendees (Json), recurrenceRule (nullable)
+    - createdAt, updatedAt
+
+  Habit
+    - id, title, description, frequency (DAILY/WEEKLY/CUSTOM)
+    - customDays (int[]), targetCount, color, icon
+    - streak, longestStreak
+    - Relations: entries (HabitEntry)
+
+  HabitEntry
+    - id, habitId, date, completed, count, note
+
+  FocusSession
+    - id, userId, taskId (nullable)
+    - startAt, endAt, plannedMinutes, actualMinutes
+    - mode (POMODORO/DEEP_WORK/FLOW), breaksTaken
+    - notes, distractionsLogged
+
+  RecurringRule
+    - id, frequency, interval, byDay, byMonthDay
+    - startDate, endDate (nullable), count (nullable)
+    - Relations: tasks, events
+
+  Integration
+    - id, userId, provider (GOOGLE/OUTLOOK/SLACK/GITHUB/NOTION/JIRA)
+    - accessToken (encrypted), refreshToken (encrypted)
+    - expiresAt, scopes (string[]), metadata (Json)
+    - isActive, lastSyncedAt
+
+  Notification
+    - id, userId, type, title, body, data (Json)
+    - read, readAt, channel (PUSH/IN_APP/EMAIL)
+    - createdAt
+
+  AIInsight
+    - id, userId, type (OVERLOAD/PATTERN/SUGGESTION/WEEKLY_RECAP)
+    - title, body, data (Json), dismissed
+    - generatedAt
+
+  WinsJournal
+    - id, userId, date, tasksCompleted (Json), note, mood (1-5)
+
+  EnergyLog
+    - id, userId, loggedAt, score (1-5), note
+
+  Attachment
+    - id, taskId, name, url, mimeType, sizeBytes, uploadedAt
+
+  Comment
+    - id, taskId, userId, body, createdAt, updatedAt
+
+  NotificationSettings
+    - id, userId, emailEnabled, pushEnabled
+    - dailyDigestTime, weeklyReviewDay
+    - mutedUntil (nullable)
+
+
+--------------------------------------------------------------------------------
+SECTION 3 — BACKEND API (Express + Node.js)
+--------------------------------------------------------------------------------
+
+Generate the complete Express API with the following route groups. Every route
+must include: Zod request validation, JWT auth middleware, error handling, and
+JSDoc comments.
+
+  3A. AUTH ROUTES  /api/auth
+      POST   /register          — email + password registration
+      POST   /login             — returns accessToken + refreshToken
+      POST   /refresh           — rotate refresh token
+      POST   /logout            — invalidate refresh token
+      POST   /oauth/google      — Google OAuth callback
+      POST   /oauth/apple       — Apple OAuth callback
+      POST   /oauth/microsoft   — Microsoft OAuth callback
+      POST   /forgot-password   — send reset email
+      POST   /reset-password    — validate token + update password
+
+  3B. USER ROUTES  /api/user
+      GET    /me                — current user profile
+      PATCH  /me                — update profile, timezone, working hours
+      PATCH  /me/energy-hours   — update peak energy window
+      POST   /me/energy-log     — log today's energy score (1-5)
+      GET    /me/energy-log     — get energy log (last 30 days)
+      DELETE /me                — account deletion (GDPR)
+
+  3C. TASK ROUTES  /api/tasks
+      GET    /                  — list with filters: status, project, tag, due
+      POST   /                  — create task (triggers AI scoring)
+      GET    /:id               — single task + subtasks + comments
+      PATCH  /:id               — update any field
+      DELETE /:id               — soft delete
+      POST   /:id/complete      — mark done + log actual time
+      POST   /:id/subtasks      — create subtask
+      GET    /:id/dependencies  — get dependency graph
+      POST   /:id/dependencies  — add dependency
+      POST   /:id/attachments   — upload file to S3
+      GET    /:id/comments      — list comments
+      POST   /:id/comments      — add comment
+      GET    /ai/next-action    — AI: what should I work on RIGHT NOW?
+      POST   /ai/bulk-schedule  — AI: schedule unscheduled tasks this week
+
+  3D. PROJECT ROUTES  /api/projects
+      GET    /                  — list user projects
+      POST   /                  — create project
+      GET    /:id               — project + tasks + milestones + members
+      PATCH  /:id               — update project
+      DELETE /:id               — archive project
+      GET    /:id/progress      — completion stats + burndown data
+      POST   /:id/members       — invite member
+      DELETE /:id/members/:uid  — remove member
+
+  3E. CALENDAR ROUTES  /api/calendar
+      GET    /events            — events in date range (all sources merged)
+      POST   /events            — create internal event
+      PATCH  /events/:id        — update event
+      DELETE /events/:id        — delete event
+      POST   /sync/google       — trigger manual Google Calendar sync
+      POST   /sync/outlook      — trigger manual Outlook sync
+      GET    /events/:id/prep   — get or generate AI meeting prep brief
+      POST   /events/:id/transcript — upload meeting audio for transcription
+      GET    /availability      — get free/busy slots in a range
+      POST   /smart-schedule    — AI: find best slot for a new event/task
+
+  3F. HABIT ROUTES  /api/habits
+      GET    /                  — list habits
+      POST   /                  — create habit
+      PATCH  /:id               — update habit
+      DELETE /:id               — delete habit
+      POST   /:id/log           — log entry for today
+      GET    /:id/history       — log history (last 90 days)
+      GET    /streaks           — all habits with current streak
+
+  3G. FOCUS ROUTES  /api/focus
+      POST   /sessions          — start a focus session
+      PATCH  /sessions/:id      — update (pause, resume, end)
+      GET    /sessions          — history with stats
+      GET    /sessions/stats    — aggregate stats: total hours, avg session
+      GET    /ambient-sounds    — list available ambient sound options
+
+  3H. INTEGRATION ROUTES  /api/integrations
+      GET    /                  — list connected integrations + status
+      POST   /connect/:provider — initiate OAuth for a provider
+      DELETE /:id               — disconnect integration
+      POST   /:id/sync          — force sync
+      GET    /:id/status        — last sync time, error info
+
+  3I. NOTIFICATION ROUTES  /api/notifications
+      GET    /                  — list notifications (unread first)
+      POST   /read/:id          — mark single as read
+      POST   /read-all          — mark all as read
+      GET    /settings          — get notification preferences
+      PATCH  /settings          — update notification preferences
+      POST   /device-token      — register FCM device token
+
+  3J. AI ROUTES  /api/ai
+      POST   /chat              — conversational AI copilot (streaming SSE)
+      GET    /insights          — get current AI insights for user
+      POST   /insights/:id/dismiss — dismiss an insight
+      GET    /weekly-recap      — generate or return this week's recap
+      POST   /email-draft       — draft email reply from context
+      POST   /task-breakdown    — break a large task into subtasks
+      GET    /overload-check    — analyze if user is overloaded this week
+
+  3K. SEARCH ROUTES  /api/search
+      GET    /universal         — search tasks, events, notes, habits at once
+      GET    /suggestions       — autocomplete suggestions
+
+  3L. ANALYTICS ROUTES  /api/analytics
+      GET    /time-by-project   — hours logged per project (last 30d)
+      GET    /task-completion   — completion rate over time
+      GET    /focus-quality     — focus session trends
+      GET    /energy-vs-output  — energy score vs tasks completed correlation
+
+
+--------------------------------------------------------------------------------
+SECTION 4 — AI SERVICE (packages/ai-service)
+--------------------------------------------------------------------------------
+
+Generate a standalone AI service module using the Anthropic Claude API. Every
+function must accept a userId so it can pull personalized context from the DB
+before calling Claude. Use streaming where the response is conversational.
+
+  4A. CopilotChat(userId, messages[], stream: boolean)
+      System prompt includes: user's name, timezone, today's tasks, today's
+      events, top 3 priorities, current energy score.
+      Returns: streaming SSE response or full text.
+      Example intents to handle: "what should I do now", "clear my afternoon",
+      "reschedule my 3pm", "draft a reply to [person]", "am I on track this week"
+
+  4B. ScoreTaskPriority(task: TaskInput, userContext: UserContext)
+      Scores 0-100 based on: deadline urgency, estimated effort, project
+      importance, user's stated priorities, time available today.
+      Returns: { score: number, reasoning: string, suggestedTimeBlock: string }
+
+  4C. GenerateMeetingPrepBrief(event: CalendarEvent, userId)
+      Pulls last 3 email threads with attendees, last meeting notes with them,
+      open action items related to the meeting topic.
+      Returns: { agenda: string[], context: string, actionItems: string[],
+                 suggestedQuestions: string[] }
+
+  4D. SummarizeMeetingTranscript(transcript: string, attendees: string[])
+      Returns: { summary: string, actionItems: ActionItem[], decisions: string[],
+                 nextMeetingDate?: string }
+
+  4E. DetectOverload(userId, weekStart: Date)
+      Analyses: total estimated task minutes vs available work minutes,
+      meeting density, current energy trend.
+      Returns: { overloaded: boolean, severity: LOW|MEDIUM|HIGH,
+                 tasksToDefer: string[], message: string }
+
+  4F. GenerateWeeklyRecap(userId, weekEnd: Date)
+      Returns: { tasksCompleted: number, focusHours: number, topWin: string,
+                 habitStreaks: object, energyAvg: number,
+                 nextWeekSuggestions: string[], message: string }
+
+  4G. SmartSchedule(userId, item: { title, durationMinutes, deadline? })
+      Fetches calendar free slots, energy peaks, existing task blocks.
+      Returns: { suggestedSlots: TimeSlot[], reasoning: string }
+
+  4H. BreakdownTask(task: Task)
+      Returns: { subtasks: { title, estimatedMinutes }[], totalMinutes: number }
+
+  4I. DraftEmailReply(emailContext: { subject, from, body }, userContext)
+      Returns: { draft: string, tone: FORMAL|CASUAL, confidence: number }
+
+  4J. GenerateProactiveInsights(userId)
+      Run nightly via BullMQ cron. Checks: overdue tasks, habit streak at risk,
+      upcoming deadlines, context-switch heavy days, positive momentum.
+      Writes AIInsight records to DB. Triggers push notification if high priority.
+
+
+--------------------------------------------------------------------------------
+SECTION 5 — REAL-TIME LAYER (Socket.IO)
+--------------------------------------------------------------------------------
+
+Generate the Socket.IO server setup and all event handlers.
+
+  Namespaces:
+    /user      — personal events (notifications, AI insights, sync updates)
+    /project   — project collaboration events
+
+  Events to implement:
+    Server → Client:
+      notification:new         — new notification object
+      task:updated             — task changed by another device/user
+      task:created             — new task (in shared project)
+      event:synced             — calendar sync completed
+      ai:insight               — new AI insight available
+      ai:chat:chunk            — streaming chat token
+      ai:chat:done             — chat stream complete
+      focus:reminder           — "You have a focus block starting in 5 min"
+
+    Client → Server:
+      task:update              — optimistic update broadcast
+      focus:start              — notify server session started
+      focus:end                — notify server session ended
+      presence:update          — user online/away/focus status
+
+
+--------------------------------------------------------------------------------
+SECTION 6 — BACKGROUND JOBS (BullMQ)
+--------------------------------------------------------------------------------
+
+Generate all BullMQ queue definitions, processors, and schedules.
+
+  Queues:
+    calendar-sync       — process: syncGoogleCalendar, syncOutlookCalendar
+                          schedule: every 15 minutes per connected user
+    ai-insights         — process: GenerateProactiveInsights
+                          schedule: nightly at 11 PM user-local time
+    weekly-recap        — process: GenerateWeeklyRecap
+                          schedule: Sunday 8 PM user-local time
+    email-processing    — process: parseEmailForTasks (Gmail/Outlook webhook)
+                          triggered by: webhook events
+    push-notifications  — process: sendFCMNotification
+                          triggered by: notification events
+    habit-reminders     — process: sendHabitReminder
+                          schedule: per-habit, per-user configured time
+    task-due-alerts     — process: checkDueTasks, send alerts
+                          schedule: every hour
+    data-cleanup        — process: archiveOldSessions, purgeDeletedData
+                          schedule: weekly
+
+
+--------------------------------------------------------------------------------
+SECTION 7 — REACT NATIVE APP STRUCTURE
+--------------------------------------------------------------------------------
+
+Generate the complete mobile app folder structure and navigation setup.
+
+  apps/mobile/src/
+  ├── navigation/
+  │   ├── RootNavigator.tsx       (auth vs main stack)
+  │   ├── MainTabNavigator.tsx    (bottom tabs)
+  │   └── stacks/                 (per-feature stack navigators)
+  ├── screens/
+  │   ├── auth/                   (Login, Register, ForgotPassword)
+  │   ├── today/                  (TodayScreen — command center)
+  │   ├── tasks/                  (TaskList, TaskDetail, NewTask, ProjectDetail)
+  │   ├── calendar/               (CalendarScreen, EventDetail, SmartSchedule)
+  │   ├── habits/                 (HabitsScreen, HabitDetail)
+  │   ├── focus/                  (FocusScreen, SessionActive, FocusHistory)
+  │   ├── ai/                     (AICopilotChat, WeeklyRecap, Insights)
+  │   ├── analytics/              (AnalyticsDashboard)
+  │   └── settings/               (Profile, Integrations, Notifications, Theme)
+  ├── components/
+  │   ├── common/                 (Button, Input, Card, Badge, Avatar, Modal)
+  │   ├── tasks/                  (TaskCard, TaskRow, PriorityBadge, SubtaskList)
+  │   ├── calendar/               (DayView, WeekView, EventCard, TimeGrid)
+  │   ├── habits/                 (HabitCard, StreakFlame, HabitGrid)
+  │   ├── focus/                  (TimerRing, AmbientSelector, SessionStats)
+  │   ├── ai/                     (ChatBubble, InsightCard, RecapCard)
+  │   └── today/                  (EnergyCheckIn, DayBrief, QuickCapture)
+  ├── hooks/
+  │   ├── useTasks.ts
+  │   ├── useCalendar.ts
+  │   ├── useHabits.ts
+  │   ├── useFocusSession.ts
+  │   ├── useAICopilot.ts
+  │   ├── useSocket.ts
+  │   └── useNotifications.ts
+  ├── store/
+  │   ├── authStore.ts            (Zustand: user, tokens)
+  │   ├── appStore.ts             (Zustand: theme, offline queue)
+  │   └── focusStore.ts           (Zustand: active session state)
+  ├── api/
+  │   ├── client.ts               (Axios instance + interceptors)
+  │   └── endpoints/              (one file per route group)
+  ├── utils/
+  │   ├── dateUtils.ts
+  │   ├── priorityUtils.ts
+  │   └── notificationUtils.ts
+  └── constants/
+      ├── theme.ts
+      ├── sounds.ts
+      └── icons.ts
+
+
+--------------------------------------------------------------------------------
+SECTION 8 — SCREEN-BY-SCREEN IMPLEMENTATION
+--------------------------------------------------------------------------------
+
+Generate full implementation for each screen listed. Each screen must include:
+actual component code, styles (NativeWind classes), React Query hooks,
+optimistic updates, skeleton loaders, pull-to-refresh, and empty states.
+
+  8A. TodayScreen (Command Center)
+      Layout:
+        - Top: date, greeting, energy check-in row (5 emoji taps)
+        - Section: Today's Events (horizontal scroll, next event highlighted)
+        - Section: Top 3 Priorities (AI-ranked, swipeable to complete)
+        - Section: Habits for today (horizontal pill row with streaks)
+        - Section: AI Insight card (dismissable, tap to open copilot)
+        - FAB: Quick Capture (hold = voice, tap = text)
+        - Bottom: Focus button — starts a session for top priority
+
+  8B. TaskListScreen
+      - Segmented control: Inbox / Today / Upcoming / Projects
+      - Filter bar: Priority / Project / Tag / Due date
+      - Swipe right = complete, swipe left = details
+      - Long press = multi-select (bulk complete/archive/move)
+      - Sort: AI Priority / Due date / Manual
+      - Inline quick-add row at top of each section
+
+  8C. CalendarScreen
+      - Week view default (swipe to next/prev week)
+      - Tap day = day detail panel slides up
+      - Events color-coded by source (Google=blue, Outlook=purple, internal=teal)
+      - Tasks with due dates shown as chips below time blocks
+      - "Schedule unblocked tasks" button — triggers AI smart schedule
+      - Long press on empty slot = create event/task
+
+  8D. FocusScreen
+      - Mode selector: Pomodoro (25/5) / Deep Work / Custom
+      - Animated ring timer (react-native-reanimated)
+      - Task selector: pick what you're working on
+      - Ambient sound picker: lo-fi, rain, white noise, cafe, silence
+      - Session log below: today's sessions, total focus time
+      - End session = prompt for reflection note + rate distraction level
+
+  8E. AICopilotScreen
+      - Full chat interface (GiftedChat)
+      - Suggested quick actions at top: "What's my day?", "Am I overloaded?",
+        "Schedule my tasks", "Summarize last meeting"
+      - Streaming responses with typing indicator
+      - AI can render structured responses: task lists, calendar blocks,
+        insights — rendered as interactive cards inside the chat
+
+  8F. HabitsScreen
+      - Grid of habit cards with streak flame and today's status
+      - Tap to log, hold to see 90-day history heatmap
+      - Weekly completion bar chart
+      - Add habit modal: title, frequency, reminder time, icon, color
+
+  8G. SettingsScreen / Integrations
+      - List of all providers with connect/disconnect status
+      - Per-integration: last synced time, sync scope, re-auth button
+      - Working hours picker
+      - Notification preferences by category
+      - Theme toggle: light/dark/system
+      - Data export (GDPR) and account deletion
+
+
+--------------------------------------------------------------------------------
+SECTION 9 — QUICK CAPTURE SYSTEM
+--------------------------------------------------------------------------------
+
+Generate the complete Quick Capture implementation.
+
+  Trigger: global FAB on every main screen
+  - Short tap  → text input modal with tag suggestions
+  - Long press → voice recording (react-native-audio-recorder-player)
+  - Share extension → capture from other apps (URLs, text, images)
+
+  On submit:
+    1. Immediately saves to local Zustand queue (offline-safe)
+    2. Syncs to backend (POST /api/tasks with status=INBOX)
+    3. AI scoring runs in background (BullMQ job)
+    4. User sees notification when AI has categorized it
+
+  Voice flow:
+    1. Record audio
+    2. Send to backend → Whisper transcription (or Claude audio if available)
+    3. Transcribed text → Quick Capture flow above
+
+
+--------------------------------------------------------------------------------
+SECTION 10 — INTEGRATIONS IMPLEMENTATION
+--------------------------------------------------------------------------------
+
+Generate the integration logic for each provider.
+
+  10A. Google Calendar
+       - OAuth2 with scopes: calendar.readonly, calendar.events
+       - Webhook via Google Channel API for real-time push
+       - BullMQ worker: pull events, upsert CalendarEvent records
+       - Conflict detection: flag if internal task overlaps meeting
+
+  10B. Google Gmail
+       - OAuth2 with scopes: gmail.readonly, gmail.send
+       - Parse emails for action items (AI-powered)
+       - Draft generation via AI route
+       - Thread context passed to CopilotChat
+
+  10C. Slack
+       - OAuth with scopes: channels:read, chat:write, users:read
+       - Slash command /apex capture [text] — creates task
+       - Incoming webhook: Slack message → task creation
+       - Outgoing: task completion → post to configured channel
+
+  10D. GitHub
+       - OAuth with scopes: repo, issues
+       - Assigned issues → auto-create tasks with link
+       - PR review requests → calendar block suggestion
+       - Closed issues → auto-complete linked tasks
+
+  10E. Microsoft Outlook / Teams
+       - Microsoft Graph API OAuth
+       - Calendar sync (same pattern as Google)
+       - Teams meeting links auto-populated on CalendarEvents
+
+
+--------------------------------------------------------------------------------
+SECTION 11 — OFFLINE SUPPORT
+--------------------------------------------------------------------------------
+
+Generate the offline-first architecture for the mobile app.
+
+  - Zustand persist with react-native AsyncStorage for critical data
+  - Optimistic mutations with rollback on network error (React Query)
+  - Offline queue: array of pending mutations stored locally
+  - On reconnect: flush queue in order, handle conflicts
+  - Show offline banner when network unavailable
+  - Tasks, habits, and focus sessions fully writable offline
+  - Calendar and AI features gracefully degrade (show cached data)
+
+
+--------------------------------------------------------------------------------
+SECTION 12 — SECURITY
+--------------------------------------------------------------------------------
+
+  - JWT access tokens: 15 min expiry, signed with RS256
+  - Refresh tokens: 30 days, stored in HttpOnly cookie, rotated on use
+  - All OAuth tokens encrypted at rest (AES-256) in DB
+  - Rate limiting: express-rate-limit on all routes, stricter on auth
+  - Helmet.js for HTTP headers
+  - Input sanitization: DOMPurify on all user text fields
+  - File upload validation: mime-type + size limits on S3 uploads
+  - GDPR: data export endpoint, full deletion cascade
+
+
+--------------------------------------------------------------------------------
+SECTION 13 — TESTING
+--------------------------------------------------------------------------------
+
+Generate test suites for:
+
+  Backend:
+    - Unit tests (Jest): all AI service functions with mocked Claude API
+    - Integration tests (Supertest): every API route group
+    - BullMQ job processor tests with mock queues
+
+  Mobile:
+    - React Native Testing Library: TodayScreen, TaskListScreen, FocusScreen
+    - Hook tests: useTasks, useCalendar, useAICopilot
+    - Store tests: authStore, focusStore
+
+
+--------------------------------------------------------------------------------
+INSTRUCTIONS FOR USE
+--------------------------------------------------------------------------------
+
+Feed SECTION 1 first to scaffold the project. Then work section by section.
+For each section, paste the relevant block into your AI assistant and say:
+
+  "Implement this section fully. Use the stack and patterns defined at the
+  top of the MASTER PROMPT. All TypeScript, no any types, full error handling."
+
+For long sections (8, 10), break into sub-items (8A, 8B...) individually.
+
+The AI will have full context of the data models (Section 2) and API shape
+(Section 3) from previous turns, so always keep those in context/memory.
+
+================================================================================
+END OF MASTER PROMPT
+================================================================================

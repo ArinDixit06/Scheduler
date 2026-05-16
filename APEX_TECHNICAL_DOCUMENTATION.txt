@@ -1,0 +1,1643 @@
+================================================================================
+  APEX — TECHNICAL DOCUMENTATION
+  Version: 1.0.0  |  Stack: React Native + Node.js + Express
+  Last Updated: 2026
+================================================================================
+
+TABLE OF CONTENTS
+-----------------
+  1.  Overview & Vision
+  2.  System Architecture
+  3.  Technology Stack
+  4.  Project Structure
+  5.  Database Schema
+  6.  API Reference
+  7.  AI Service Layer
+  8.  Real-Time System
+  9.  Background Jobs
+  10. Mobile App Architecture
+  11. State Management
+  12. Integration Guide
+  13. Authentication & Security
+  14. Offline Support
+  15. Push Notifications
+  16. Environment Variables
+  17. Deployment
+  18. Testing Strategy
+  19. Performance Guidelines
+  20. Versioning & Changelog
+
+
+================================================================================
+1. OVERVIEW & VISION
+================================================================================
+
+APEX is an ultimate personal productivity application designed to unify task
+management, calendar scheduling, habit tracking, deep work focus, and AI-powered
+assistance into a single coherent experience.
+
+Core Design Principles:
+  - Zero Friction: Capture anything in under 2 seconds
+  - One Source of Truth: No context-switching between apps
+  - AI-First: Intelligence is woven into every feature, not bolted on
+  - Wellbeing-Aware: The app tracks energy and prevents overload, not just output
+  - Offline-Capable: Every core feature works without a connection
+
+Target Platforms:
+  - iOS 15+
+  - Android 11+
+  - (Future) Web via React Native Web
+
+
+================================================================================
+2. SYSTEM ARCHITECTURE
+================================================================================
+
+High-Level Architecture:
+
+  [React Native App]
+       |
+       | HTTPS / WSS
+       |
+  [Express API Server]  ←→  [Redis (Cache + Queues)]
+       |
+       |──→ [PostgreSQL (Primary DB via Prisma)]
+       |──→ [AI Microservice (Claude API)]
+       |──→ [BullMQ Workers]
+       |         |──→ Calendar Sync Worker
+       |         |──→ AI Insights Worker
+       |         |──→ Push Notification Worker
+       |         └──→ Email Processing Worker
+       |──→ [Socket.IO Server]
+       |──→ [AWS S3 (File Storage)]
+       └──→ [Firebase FCM (Push)]
+
+External Integrations:
+  [Google APIs]         — Calendar, Gmail, OAuth
+  [Microsoft Graph]     — Outlook Calendar, Teams
+  [Slack API]           — Messages, Slash Commands
+  [GitHub API]          — Issues, PRs
+  [Anthropic API]       — Claude AI (all AI features)
+
+Data Flow Summary:
+  1. Mobile app authenticates → receives JWT access + refresh tokens
+  2. All API calls go through /api/* with Bearer token auth
+  3. Real-time updates arrive via Socket.IO (/user namespace)
+  4. Background jobs run on BullMQ workers, results pushed via Socket.IO
+  5. AI features call Claude API through the ai-service package
+  6. File uploads go directly to S3 via pre-signed URLs
+
+
+================================================================================
+3. TECHNOLOGY STACK
+================================================================================
+
+FRONTEND (apps/mobile)
+  Runtime         : React Native 0.74 + Expo SDK 54 only
+  Language        : TypeScript 5.4 (strict mode)
+  Navigation      : React Navigation v6 (Stack + Bottom Tabs + Drawer)
+  State (local)   : Zustand 4 + Immer
+  State (server)  : TanStack React Query v5
+  Styling         : NativeWind 4 (Tailwind CSS for React Native)
+  Animations      : react-native-reanimated 3 + react-native-gesture-handler
+  Calendar UI     : react-native-calendars
+  Chat UI         : react-native-gifted-chat
+  Audio           : react-native-audio-recorder-player
+  Storage         : @react-native-async-storage/async-storage
+  Push            : @react-native-firebase/messaging
+  Sockets         : socket.io-client
+  Forms           : react-hook-form + zod resolvers
+  Icons           : @expo/vector-icons (MaterialCommunityIcons)
+
+BACKEND (apps/backend)
+  Runtime         : Node.js 20 LTS
+  Framework       : Express 4.19
+  Language        : TypeScript 5.4
+  ORM             : Prisma 5 (with Prisma Migrate)
+  Database        : PostgreSQL 16
+  Cache           : Redis 7 (ioredis)
+  Job Queue       : BullMQ 5
+  Real-time       : Socket.IO 4
+  Auth            : JWT (jsonwebtoken), Passport.js (OAuth strategies)
+  Validation      : Zod 3
+  File Upload     : Multer + AWS SDK v3 (S3)
+  Email           : Nodemailer + AWS SES
+  Logging         : Winston + Morgan
+  Testing         : Jest + Supertest
+  Process Manager : PM2 (production)
+
+AI SERVICE (packages/ai-service)
+  Provider        : Anthropic Claude API (claude-sonnet-4-20250514)
+  SDK             : @anthropic-ai/sdk
+  Streaming       : Server-Sent Events (SSE) for chat
+
+INFRASTRUCTURE
+  Container       : Docker + Docker Compose
+  CI/CD           : GitHub Actions
+  Hosting         : AWS EC2 (API) + RDS (PostgreSQL) + ElastiCache (Redis)
+  CDN             : CloudFront (S3 assets)
+  Monitoring      : Sentry (errors) + Datadog (metrics)
+
+
+================================================================================
+4. PROJECT STRUCTURE
+================================================================================
+
+apex/
+├── apps/
+│   ├── mobile/
+│   │   ├── src/
+│   │   │   ├── navigation/
+│   │   │   │   ├── RootNavigator.tsx
+│   │   │   │   ├── MainTabNavigator.tsx
+│   │   │   │   └── stacks/
+│   │   │   ├── screens/
+│   │   │   │   ├── auth/
+│   │   │   │   │   ├── LoginScreen.tsx
+│   │   │   │   │   ├── RegisterScreen.tsx
+│   │   │   │   │   └── ForgotPasswordScreen.tsx
+│   │   │   │   ├── today/
+│   │   │   │   │   └── TodayScreen.tsx
+│   │   │   │   ├── tasks/
+│   │   │   │   │   ├── TaskListScreen.tsx
+│   │   │   │   │   ├── TaskDetailScreen.tsx
+│   │   │   │   │   ├── NewTaskScreen.tsx
+│   │   │   │   │   └── ProjectDetailScreen.tsx
+│   │   │   │   ├── calendar/
+│   │   │   │   │   ├── CalendarScreen.tsx
+│   │   │   │   │   └── EventDetailScreen.tsx
+│   │   │   │   ├── habits/
+│   │   │   │   │   ├── HabitsScreen.tsx
+│   │   │   │   │   └── HabitDetailScreen.tsx
+│   │   │   │   ├── focus/
+│   │   │   │   │   ├── FocusScreen.tsx
+│   │   │   │   │   └── SessionActiveScreen.tsx
+│   │   │   │   ├── ai/
+│   │   │   │   │   ├── AICopilotScreen.tsx
+│   │   │   │   │   ├── WeeklyRecapScreen.tsx
+│   │   │   │   │   └── InsightsScreen.tsx
+│   │   │   │   ├── analytics/
+│   │   │   │   │   └── AnalyticsDashboard.tsx
+│   │   │   │   └── settings/
+│   │   │   │       ├── SettingsScreen.tsx
+│   │   │   │       ├── IntegrationsScreen.tsx
+│   │   │   │       └── NotificationSettingsScreen.tsx
+│   │   │   ├── components/
+│   │   │   │   ├── common/
+│   │   │   │   │   ├── Button.tsx
+│   │   │   │   │   ├── Input.tsx
+│   │   │   │   │   ├── Card.tsx
+│   │   │   │   │   ├── Badge.tsx
+│   │   │   │   │   ├── Avatar.tsx
+│   │   │   │   │   ├── Modal.tsx
+│   │   │   │   │   ├── SkeletonLoader.tsx
+│   │   │   │   │   └── EmptyState.tsx
+│   │   │   │   ├── tasks/
+│   │   │   │   │   ├── TaskCard.tsx
+│   │   │   │   │   ├── TaskRow.tsx
+│   │   │   │   │   ├── PriorityBadge.tsx
+│   │   │   │   │   └── SubtaskList.tsx
+│   │   │   │   ├── calendar/
+│   │   │   │   │   ├── DayView.tsx
+│   │   │   │   │   ├── WeekView.tsx
+│   │   │   │   │   └── EventCard.tsx
+│   │   │   │   ├── habits/
+│   │   │   │   │   ├── HabitCard.tsx
+│   │   │   │   │   ├── StreakFlame.tsx
+│   │   │   │   │   └── HabitHeatmap.tsx
+│   │   │   │   ├── focus/
+│   │   │   │   │   ├── TimerRing.tsx
+│   │   │   │   │   └── AmbientSelector.tsx
+│   │   │   │   ├── ai/
+│   │   │   │   │   ├── ChatBubble.tsx
+│   │   │   │   │   └── InsightCard.tsx
+│   │   │   │   └── today/
+│   │   │   │       ├── EnergyCheckIn.tsx
+│   │   │   │       ├── DayBrief.tsx
+│   │   │   │       └── QuickCapture.tsx
+│   │   │   ├── hooks/
+│   │   │   │   ├── useTasks.ts
+│   │   │   │   ├── useCalendar.ts
+│   │   │   │   ├── useHabits.ts
+│   │   │   │   ├── useFocusSession.ts
+│   │   │   │   ├── useAICopilot.ts
+│   │   │   │   ├── useSocket.ts
+│   │   │   │   └── useNotifications.ts
+│   │   │   ├── store/
+│   │   │   │   ├── authStore.ts
+│   │   │   │   ├── appStore.ts
+│   │   │   │   └── focusStore.ts
+│   │   │   ├── api/
+│   │   │   │   ├── client.ts
+│   │   │   │   └── endpoints/
+│   │   │   │       ├── auth.ts
+│   │   │   │       ├── tasks.ts
+│   │   │   │       ├── calendar.ts
+│   │   │   │       ├── habits.ts
+│   │   │   │       ├── focus.ts
+│   │   │   │       ├── ai.ts
+│   │   │   │       └── integrations.ts
+│   │   │   ├── utils/
+│   │   │   │   ├── dateUtils.ts
+│   │   │   │   ├── priorityUtils.ts
+│   │   │   │   └── notificationUtils.ts
+│   │   │   └── constants/
+│   │   │       ├── theme.ts
+│   │   │       ├── sounds.ts
+│   │   │       └── icons.ts
+│   │   ├── app.json
+│   │   ├── tsconfig.json
+│   │   └── package.json
+│   │
+│   └── backend/
+│       ├── src/
+│       │   ├── index.ts                  (server entry point)
+│       │   ├── app.ts                    (Express app factory)
+│       │   ├── routes/
+│       │   │   ├── auth.routes.ts
+│       │   │   ├── user.routes.ts
+│       │   │   ├── task.routes.ts
+│       │   │   ├── project.routes.ts
+│       │   │   ├── calendar.routes.ts
+│       │   │   ├── habit.routes.ts
+│       │   │   ├── focus.routes.ts
+│       │   │   ├── integration.routes.ts
+│       │   │   ├── notification.routes.ts
+│       │   │   ├── ai.routes.ts
+│       │   │   ├── search.routes.ts
+│       │   │   └── analytics.routes.ts
+│       │   ├── controllers/              (one per route file)
+│       │   ├── services/                 (business logic)
+│       │   ├── middleware/
+│       │   │   ├── auth.middleware.ts
+│       │   │   ├── validate.middleware.ts
+│       │   │   ├── rateLimiter.ts
+│       │   │   └── errorHandler.ts
+│       │   ├── jobs/                     (BullMQ workers)
+│       │   ├── socket/                   (Socket.IO handlers)
+│       │   ├── integrations/             (provider clients)
+│       │   └── lib/
+│       │       ├── prisma.ts
+│       │       ├── redis.ts
+│       │       ├── s3.ts
+│       │       └── fcm.ts
+│       ├── prisma/
+│       │   └── schema.prisma
+│       ├── tsconfig.json
+│       └── package.json
+│
+├── packages/
+│   ├── shared-types/
+│   │   ├── src/
+│   │   │   ├── models.ts
+│   │   │   ├── api.ts
+│   │   │   └── enums.ts
+│   │   └── package.json
+│   ├── shared-utils/
+│   │   ├── src/
+│   │   │   ├── date.ts
+│   │   │   ├── validators.ts
+│   │   │   └── formatters.ts
+│   │   └── package.json
+│   └── ai-service/
+│       ├── src/
+│       │   ├── copilot.ts
+│       │   ├── scoring.ts
+│       │   ├── scheduling.ts
+│       │   ├── meetings.ts
+│       │   ├── insights.ts
+│       │   └── index.ts
+│       └── package.json
+│
+├── docker-compose.yml
+├── turbo.json
+├── .env.example
+└── package.json
+
+
+================================================================================
+5. DATABASE SCHEMA
+================================================================================
+
+All models defined using Prisma ORM. Database: PostgreSQL 16.
+
+--- ENUMS ---
+
+TaskStatus      : INBOX | TODO | IN_PROGRESS | DONE | ARCHIVED
+Priority        : LOW | MEDIUM | HIGH | URGENT
+ProjectStatus   : ACTIVE | ON_HOLD | COMPLETED | ARCHIVED
+HabitFrequency  : DAILY | WEEKLY | CUSTOM
+FocusMode       : POMODORO | DEEP_WORK | FLOW | CUSTOM
+CalSource       : GOOGLE | OUTLOOK | APPLE | INTERNAL
+IntegProvider   : GOOGLE | OUTLOOK | SLACK | GITHUB | NOTION | JIRA
+InsightType     : OVERLOAD | PATTERN | SUGGESTION | WEEKLY_RECAP
+NotifChannel    : PUSH | IN_APP | EMAIL
+
+--- MODEL DETAILS ---
+
+User
+  id                 String           @id @default(cuid())
+  email              String           @unique
+  name               String
+  avatarUrl          String?
+  passwordHash       String?
+  timezone           String           @default("UTC")
+  locale             String           @default("en")
+  workingHoursStart  Int              @default(9)   // 0-23
+  workingHoursEnd    Int              @default(18)
+  energyPeakStart    Int              @default(9)
+  energyPeakEnd      Int              @default(12)
+  fcmTokens          String[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  lastLoginAt        DateTime?
+  -- Relations --
+  tasks              Task[]
+  projects           Project[]
+  habits             Habit[]
+  events             CalendarEvent[]
+  integrations       Integration[]
+  notifications      Notification[]
+  notifSettings      NotifSettings?
+  sessions           RefreshSession[]
+  aiInsights         AIInsight[]
+  energyLogs         EnergyLog[]
+  focusSessions      FocusSession[]
+  winsJournal        WinsJournal[]
+
+Task
+  id                 String           @id @default(cuid())
+  userId             String
+  title              String
+  description        String?
+  status             TaskStatus       @default(INBOX)
+  aiPriority         Int?             // 0-100 score
+  manualPriority     Priority?
+  dueDate            DateTime?
+  estimatedMinutes   Int?
+  actualMinutes      Int?
+  projectId          String?
+  parentTaskId       String?
+  recurringRuleId    String?
+  tags               String[]
+  aiSummary          String?
+  aiNextStep         String?
+  completedAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  -- Relations --
+  user               User
+  project            Project?
+  subtasks           Task[]           @relation("SubtaskRelation")
+  parent             Task?            @relation("SubtaskRelation")
+  dependencies       TaskDependency[] @relation("DependentTask")
+  blockedBy          TaskDependency[] @relation("BlockingTask")
+  attachments        Attachment[]
+  comments           Comment[]
+  focusSessions      FocusSession[]
+
+TaskDependency
+  id                 String           @id @default(cuid())
+  dependentTaskId    String           // this task is blocked by →
+  blockingTaskId     String           // → this task
+  createdAt          DateTime         @default(now())
+
+Project
+  id                 String           @id @default(cuid())
+  ownerId            String
+  name               String
+  description        String?
+  color              String           @default("#6366f1")
+  icon               String           @default("folder")
+  status             ProjectStatus    @default(ACTIVE)
+  startDate          DateTime?
+  targetDate         DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  -- Relations --
+  tasks              Task[]
+  members            ProjectMember[]
+  milestones         Milestone[]
+
+ProjectMember
+  id                 String           @id @default(cuid())
+  projectId          String
+  userId             String
+  role               String           @default("MEMBER")
+  joinedAt           DateTime         @default(now())
+
+Milestone
+  id                 String           @id @default(cuid())
+  projectId          String
+  title              String
+  dueDate            DateTime
+  completed          Boolean          @default(false)
+  completedAt        DateTime?
+
+CalendarEvent
+  id                 String           @id @default(cuid())
+  userId             String
+  title              String
+  description        String?
+  location           String?
+  meetingUrl         String?
+  startAt            DateTime
+  endAt              DateTime
+  allDay             Boolean          @default(false)
+  timezone           String
+  externalId         String?
+  externalCalId      String?
+  source             CalSource        @default(INTERNAL)
+  attendees          Json             @default("[]")
+  recurrenceRule     String?
+  aiPrepBrief        Json?
+  transcriptId       String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  @@unique([userId, externalId, source])
+
+Habit
+  id                 String           @id @default(cuid())
+  userId             String
+  title              String
+  description        String?
+  frequency          HabitFrequency   @default(DAILY)
+  customDays         Int[]            // 0=Sun, 6=Sat
+  targetCount        Int              @default(1)
+  color              String           @default("#10b981")
+  icon               String           @default("check")
+  streak             Int              @default(0)
+  longestStreak      Int              @default(0)
+  archivedAt         DateTime?
+  createdAt          DateTime         @default(now())
+  -- Relations --
+  entries            HabitEntry[]
+
+HabitEntry
+  id                 String           @id @default(cuid())
+  habitId            String
+  date               DateTime         // date only, no time
+  completed          Boolean          @default(false)
+  count              Int              @default(0)
+  note               String?
+  @@unique([habitId, date])
+
+FocusSession
+  id                 String           @id @default(cuid())
+  userId             String
+  taskId             String?
+  startAt            DateTime
+  endAt              DateTime?
+  plannedMinutes     Int
+  actualMinutes      Int?
+  mode               FocusMode        @default(POMODORO)
+  breaksTaken        Int              @default(0)
+  distractionLevel   Int?             // 1-5
+  notes              String?
+
+RecurringRule
+  id                 String           @id @default(cuid())
+  frequency          String           // RRULE frequency
+  interval           Int              @default(1)
+  byDay              String[]         // MO, TU, WE...
+  byMonthDay         Int[]
+  startDate          DateTime
+  endDate            DateTime?
+  count              Int?
+
+Integration
+  id                 String           @id @default(cuid())
+  userId             String
+  provider           IntegProvider
+  accessToken        String           // encrypted AES-256
+  refreshToken       String?          // encrypted AES-256
+  expiresAt          DateTime?
+  scopes             String[]
+  metadata           Json             @default("{}")
+  isActive           Boolean          @default(true)
+  lastSyncedAt       DateTime?
+  createdAt          DateTime         @default(now())
+  @@unique([userId, provider])
+
+Notification
+  id                 String           @id @default(cuid())
+  userId             String
+  type               String
+  title              String
+  body               String
+  data               Json             @default("{}")
+  read               Boolean          @default(false)
+  readAt             DateTime?
+  channel            NotifChannel     @default(IN_APP)
+  createdAt          DateTime         @default(now())
+
+AIInsight
+  id                 String           @id @default(cuid())
+  userId             String
+  type               InsightType
+  title              String
+  body               String
+  data               Json             @default("{}")
+  dismissed          Boolean          @default(false)
+  generatedAt        DateTime         @default(now())
+
+WinsJournal
+  id                 String           @id @default(cuid())
+  userId             String
+  date               DateTime
+  tasksCompleted     Json             @default("[]")
+  note               String?
+  mood               Int?             // 1-5
+  @@unique([userId, date])
+
+EnergyLog
+  id                 String           @id @default(cuid())
+  userId             String
+  loggedAt           DateTime         @default(now())
+  score              Int              // 1-5
+  note               String?
+  @@unique([userId, loggedAt])
+
+Attachment
+  id                 String           @id @default(cuid())
+  taskId             String
+  name               String
+  url                String
+  mimeType           String
+  sizeBytes          Int
+  uploadedAt         DateTime         @default(now())
+
+Comment
+  id                 String           @id @default(cuid())
+  taskId             String
+  userId             String
+  body               String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+NotifSettings
+  id                 String           @id @default(cuid())
+  userId             String           @unique
+  emailEnabled       Boolean          @default(true)
+  pushEnabled        Boolean          @default(true)
+  dailyDigestTime    Int              @default(8)  // hour of day
+  weeklyReviewDay    Int              @default(0)  // 0=Sun
+  mutedUntil         DateTime?
+
+RefreshSession
+  id                 String           @id @default(cuid())
+  userId             String
+  token              String           @unique
+  deviceInfo         String?
+  expiresAt          DateTime
+  createdAt          DateTime         @default(now())
+
+
+================================================================================
+6. API REFERENCE
+================================================================================
+
+Base URL: https://api.apexapp.io/api
+Auth: Bearer <accessToken> on all routes except /auth/*
+
+All responses follow this envelope:
+  Success: { success: true, data: <payload> }
+  Error:   { success: false, error: { code: string, message: string } }
+
+Pagination (list endpoints):
+  Query params: ?page=1&limit=20
+  Response includes: { data: [], meta: { page, limit, total, totalPages } }
+
+--- AUTH ---
+
+POST /auth/register
+  Body: { email, password, name, timezone }
+  Returns: { user, accessToken, refreshToken }
+
+POST /auth/login
+  Body: { email, password }
+  Returns: { user, accessToken, refreshToken }
+
+POST /auth/refresh
+  Body: { refreshToken }
+  Returns: { accessToken, refreshToken }
+
+POST /auth/logout
+  Body: { refreshToken }
+  Returns: { success: true }
+
+POST /auth/oauth/google
+  Body: { code, redirectUri }
+  Returns: { user, accessToken, refreshToken }
+
+--- TASKS ---
+
+GET /tasks
+  Query: status, projectId, tag, dueBefore, dueAfter, sort, page, limit
+  Returns: paginated Task[]
+
+POST /tasks
+  Body: { title, description?, dueDate?, estimatedMinutes?, projectId?,
+          tags?, manualPriority? }
+  Returns: Task (AI scoring runs async)
+
+GET /tasks/:id
+  Returns: Task + subtasks[] + comments[] + attachments[]
+
+PATCH /tasks/:id
+  Body: partial Task fields
+  Returns: updated Task
+
+DELETE /tasks/:id
+  Returns: { success: true }
+
+POST /tasks/:id/complete
+  Body: { actualMinutes? }
+  Returns: updated Task
+
+GET /tasks/ai/next-action
+  Returns: { task: Task, reasoning: string }
+
+POST /tasks/ai/bulk-schedule
+  Body: { weekStart: ISODate }
+  Returns: { scheduled: { taskId, slot }[], message: string }
+
+--- CALENDAR ---
+
+GET /calendar/events
+  Query: start (ISO), end (ISO), sources? (comma-separated)
+  Returns: CalendarEvent[]
+
+POST /calendar/events
+  Body: { title, startAt, endAt, description?, location?, meetingUrl?,
+          allDay?, attendees? }
+  Returns: CalendarEvent
+
+POST /calendar/smart-schedule
+  Body: { title, durationMinutes, deadline?, preferPeakEnergy? }
+  Returns: { slots: [{ start, end, score, reason }] }
+
+GET /calendar/events/:id/prep
+  Returns: { agenda, context, actionItems, suggestedQuestions }
+  (generates via AI if not cached)
+
+--- HABITS ---
+
+GET /habits
+  Returns: Habit[] with today's entry status and streak
+
+POST /habits
+  Body: { title, frequency, customDays?, targetCount?, color?, icon?,
+          reminderTime? }
+  Returns: Habit
+
+POST /habits/:id/log
+  Body: { date, completed, count?, note? }
+  Returns: HabitEntry + updated streak
+
+GET /habits/:id/history
+  Query: start, end
+  Returns: HabitEntry[]
+
+--- FOCUS ---
+
+POST /focus/sessions
+  Body: { plannedMinutes, mode, taskId? }
+  Returns: FocusSession (active)
+
+PATCH /focus/sessions/:id
+  Body: { action: "pause"|"resume"|"end", notes?, distractionLevel? }
+  Returns: updated FocusSession
+
+GET /focus/sessions/stats
+  Returns: { totalMinutes, sessionsCount, avgDuration, longestStreak }
+
+--- AI ---
+
+POST /ai/chat
+  Body: { messages: [{ role, content }] }
+  Response: text/event-stream (SSE)
+  Events: data: { chunk: string } — data: [DONE]
+
+GET /ai/insights
+  Returns: AIInsight[] (undismissed, newest first)
+
+GET /ai/weekly-recap
+  Query: weekEnd (ISO date, defaults to last Sunday)
+  Returns: WeeklyRecap object
+
+POST /ai/task-breakdown
+  Body: { taskId }
+  Returns: { subtasks: [{ title, estimatedMinutes }] }
+
+GET /ai/overload-check
+  Returns: { overloaded, severity, tasksToDefer, message }
+
+--- INTEGRATIONS ---
+
+GET /integrations
+  Returns: Integration[] with status and lastSyncedAt
+
+POST /integrations/connect/:provider
+  Returns: { authUrl }  (redirect user to this URL)
+
+DELETE /integrations/:id
+  Returns: { success: true }
+
+POST /integrations/:id/sync
+  Returns: { jobId }  (BullMQ job ID, monitor via socket)
+
+--- SEARCH ---
+
+GET /search/universal
+  Query: q (required), types? (task,event,habit,note — comma-separated)
+  Returns: { tasks: [], events: [], habits: [] }
+
+--- ANALYTICS ---
+
+GET /analytics/time-by-project
+  Query: start, end
+  Returns: [{ projectId, projectName, totalMinutes }]
+
+GET /analytics/task-completion
+  Query: start, end, granularity (day|week)
+  Returns: [{ date, completed, created }]
+
+
+================================================================================
+7. AI SERVICE LAYER
+================================================================================
+
+Location: packages/ai-service/src/
+Model used: claude-sonnet-4-20250514
+
+All AI functions accept a userId. Before calling Claude, each function fetches
+the minimal necessary context from the DB to personalize the response.
+
+--- FUNCTION CATALOG ---
+
+CopilotChat(userId, messages, stream)
+  Context fetched: user name, timezone, today's tasks (top 10 by priority),
+                   today's events, current energy score, top 3 projects
+  System prompt template:
+    "You are APEX, a personal productivity AI for {name}.
+     Current time: {localTime} ({timezone}).
+     Today's meetings: {events}.
+     Priority tasks: {tasks}.
+     Energy level: {energyScore}/5.
+     Be concise, direct, and action-oriented. When the user asks to change
+     their schedule, confirm before acting."
+  Returns: streaming SSE or full string
+
+ScoreTaskPriority(task, userContext)
+  Scoring factors:
+    - Deadline urgency    (40% weight): hours until due / working hours available
+    - Project importance  (25% weight): project priority rank
+    - Effort vs capacity  (20% weight): estimated minutes vs free time today
+    - User habits         (15% weight): time of day they usually do this type
+  Returns: { score: 0-100, reasoning: string, suggestedTimeBlock: string }
+
+GenerateMeetingPrepBrief(event, userId)
+  Context: attendee email threads (last 3), previous meeting notes with same
+           attendees, open tasks linked to the meeting topic
+  Returns: { agenda[], context, actionItems[], suggestedQuestions[] }
+
+SummarizeMeetingTranscript(transcript, attendees)
+  Prompt strategy: structured JSON output requested
+  Returns: { summary, actionItems[{ owner, task, deadline? }], decisions[],
+             followUpDate? }
+
+DetectOverload(userId, weekStart)
+  Analysis: sum(estimatedMinutes for tasks due this week) vs
+            (workingHoursPerDay * 5 * 60 * 0.7) [70% utilization cap]
+  Returns: { overloaded, severity: LOW|MEDIUM|HIGH, tasksToDefer[],
+             meetingLoad: number, message }
+
+GenerateWeeklyRecap(userId, weekEnd)
+  Aggregates: tasks completed, focus minutes, habit streaks, energy avg, wins
+  Returns: { tasksCompleted, focusHours, habitStreaks, energyAvg, topWin,
+             nextWeekSuggestions[], message }
+
+SmartSchedule(userId, item)
+  Fetches: free/busy slots from all calendars + blocked focus times
+  Scores slots by: proximity to energy peak, buffer before/after meetings,
+                   deadline pressure
+  Returns: { suggestedSlots: [{ start, end, score, reason }][] }
+
+BreakdownTask(task)
+  Prompt: Ask Claude to decompose task into 3-7 concrete subtasks with durations
+  Returns: { subtasks: [{ title, estimatedMinutes }], totalMinutes }
+
+DraftEmailReply(emailContext, userContext)
+  Context: user's writing style (sampled from past emails if available)
+  Returns: { draft, tone: FORMAL|CASUAL, confidence: 0-1 }
+
+GenerateProactiveInsights(userId)
+  Runs nightly. Checks:
+    - Tasks overdue > 2 days          → OVERLOAD insight
+    - Habit streak at risk (missed yesterday) → PATTERN insight
+    - 3+ back-to-back meetings tomorrow  → SUGGESTION (buffer time)
+    - User completed 5+ tasks in a day   → SUGGESTION (positive momentum)
+    - No deep work blocks this week      → SUGGESTION
+  Writes AIInsight records, triggers push notification for HIGH priority
+
+--- ERROR HANDLING ---
+
+All AI functions implement retry logic:
+  - 3 retries with exponential backoff (1s, 2s, 4s)
+  - If Claude API unavailable: return cached insight if available,
+    else return graceful degraded response (no AI, show raw data)
+
+Rate limiting: 100 requests/user/hour to AI endpoints
+
+
+================================================================================
+8. REAL-TIME SYSTEM
+================================================================================
+
+Transport: Socket.IO 4 over WebSocket (fallback: HTTP long-polling)
+Auth: JWT token passed as handshake query param
+
+Namespaces:
+  /user     — private, authenticated per user
+  /project  — shared within a project (joined by projectId)
+
+--- SERVER → CLIENT EVENTS ---
+
+notification:new
+  Payload: Notification object
+  When: any new notification created for user
+
+task:updated
+  Payload: { taskId, changes: Partial<Task>, updatedBy: userId }
+  When: task modified from another device or team member
+
+task:created
+  Payload: Task object
+  When: new task added in a shared project
+
+event:synced
+  Payload: { provider, eventsAdded, eventsUpdated, eventsRemoved }
+  When: calendar sync worker completes
+
+ai:insight
+  Payload: AIInsight object
+  When: proactive insight generated
+
+ai:chat:chunk
+  Payload: { chunk: string, sessionId: string }
+  When: streaming AI response token
+
+ai:chat:done
+  Payload: { sessionId: string, fullText: string }
+  When: streaming AI response complete
+
+focus:reminder
+  Payload: { message: string, taskTitle?: string, minutesUntil: number }
+  When: scheduled focus block starts in 5 minutes
+
+sync:progress
+  Payload: { provider, status: 'started'|'progress'|'done', count: number }
+  When: integration sync job progress updates
+
+--- CLIENT → SERVER EVENTS ---
+
+task:update
+  Payload: { taskId, changes }
+  Action: broadcast to other devices of same user
+
+focus:start
+  Payload: { sessionId, taskId? }
+  Action: update user presence to FOCUS
+
+focus:end
+  Payload: { sessionId }
+  Action: update user presence to ONLINE
+
+presence:update
+  Payload: { status: 'ONLINE'|'AWAY'|'FOCUS'|'DND' }
+  Action: broadcast to project namespace members
+
+--- CONNECTION MANAGEMENT ---
+
+On connect:
+  - Validate JWT, extract userId
+  - Join user's personal room (`user:${userId}`)
+  - Join all project rooms user is a member of
+  - Flush any queued offline notifications
+
+On disconnect:
+  - Remove from all rooms
+  - Store offline notification queue in Redis (TTL: 7 days)
+
+
+================================================================================
+9. BACKGROUND JOBS
+================================================================================
+
+Queue implementation: BullMQ 5 over Redis
+
+--- QUEUE DEFINITIONS ---
+
+Queue: calendar-sync
+  Job: syncUserCalendar
+  Payload: { userId, provider: 'google'|'outlook' }
+  Schedule: every 15 minutes per active integration
+  Concurrency: 10
+  Retry: 3x with exponential backoff
+  On success: emit event:synced via Socket.IO
+  On failure: mark integration with error status
+
+Queue: ai-insights
+  Job: generateInsights
+  Payload: { userId }
+  Schedule: cron 23:00 in user's local timezone
+  Concurrency: 5
+  Timeout: 60 seconds per job
+
+Queue: weekly-recap
+  Job: generateWeeklyRecap
+  Payload: { userId }
+  Schedule: cron Sunday 20:00 in user's timezone
+  Concurrency: 5
+
+Queue: push-notifications
+  Job: sendPushNotification
+  Payload: { userId, title, body, data }
+  Priority: uses BullMQ priorities (1=high, 10=low)
+  Retry: 3x
+  On success: mark Notification.channel as delivered
+
+Queue: email-processing
+  Job: parseEmailForTasks
+  Payload: { userId, emailData: { subject, from, body, threadId } }
+  Triggered by: Gmail/Outlook webhook
+  Concurrency: 20
+  Action: AI extracts action items, creates tasks with INBOX status
+
+Queue: habit-reminders
+  Job: sendHabitReminder
+  Payload: { userId, habitId }
+  Schedule: per-habit, per-user defined time
+  Action: sends push notification, creates in-app notification
+
+Queue: task-due-alerts
+  Job: checkDueTasksAndAlert
+  Schedule: every hour
+  Action: find tasks due in next 24h with no alert sent, queue push notifications
+
+Queue: data-cleanup
+  Job: archiveOldData
+  Schedule: weekly (Sunday 2 AM UTC)
+  Action: archive completed tasks >90 days, purge soft-deleted records >30 days
+
+--- MONITORING ---
+
+Bull Board dashboard available at /admin/queues (admin auth required)
+Metrics exported to Datadog: job throughput, failure rate, queue depth
+
+
+================================================================================
+10. MOBILE APP ARCHITECTURE
+================================================================================
+
+--- NAVIGATION STRUCTURE ---
+
+RootNavigator
+  ├── AuthStack (unauthenticated)
+  │   ├── LoginScreen
+  │   ├── RegisterScreen
+  │   └── ForgotPasswordScreen
+  └── MainApp (authenticated)
+      └── MainTabNavigator (bottom tabs)
+          ├── Tab: Today     → TodayScreen
+          ├── Tab: Tasks     → TaskListScreen → TaskDetailScreen
+          │                               → NewTaskScreen
+          │                               → ProjectDetailScreen
+          ├── Tab: Calendar  → CalendarScreen → EventDetailScreen
+          ├── Tab: Focus     → FocusScreen → SessionActiveScreen
+          └── Tab: More      → Drawer
+              ├── HabitsScreen → HabitDetailScreen
+              ├── AICopilotScreen
+              ├── WeeklyRecapScreen
+              ├── AnalyticsDashboard
+              └── SettingsScreen → IntegrationsScreen
+                               → NotificationSettingsScreen
+                               → ProfileScreen
+
+--- SCREEN SPECIFICATIONS ---
+
+TodayScreen (Command Center)
+  Sections (scrollable):
+    1. Header: date, day name, greeting ("Good morning, {name}")
+    2. EnergyCheckIn: 5 emoji buttons (1=drained ... 5=energized)
+       - Shows only if not logged today
+       - Tapping immediately POSTs to /user/me/energy-log
+    3. EventStrip: horizontal scroll of today's CalendarEvents
+       - Next event card is highlighted with countdown ("in 23 min")
+       - Tap → EventDetailScreen
+    4. TopPriorities: 3 AI-ranked tasks
+       - Swipe right = complete, swipe left = snooze
+       - Shows AI reasoning as subtitle ("Due today, 45 min est.")
+    5. HabitsRow: today's habits as pill buttons
+       - Completed = filled, remaining = outline + streak count
+    6. InsightCard: latest undismissed AIInsight
+       - Tap = dismiss, long press = open copilot with context
+    7. WinsJournal entry (if tasks completed today)
+  FAB (global): QuickCapture
+    - Short tap: text input sheet
+    - Long press: voice recording
+
+TaskListScreen
+  Tabs: Inbox | Today | Upcoming | Projects
+  Features:
+    - Filter bar (collapsible): priority, project, tag, due date range
+    - Sort toggle: AI Priority (default) | Due Date | Manual
+    - Swipe gestures: right=complete, left=open detail
+    - Multi-select: long press enables, batch actions appear in header
+    - Pull-to-refresh: refetch + re-score priorities
+    - Inline add row: at top of list for fast task entry
+
+CalendarScreen
+  Default view: Week (Mon–Sun strip at top, time grid below)
+  Features:
+    - Swipe left/right to navigate weeks
+    - Tap day in strip = scroll time grid to that day
+    - Events color-coded: Google=blue, Outlook=purple, internal=teal
+    - Task due-date chips shown below respective day column
+    - "Auto-schedule" button: calls /calendar/smart-schedule for open tasks
+    - Long press empty slot: quick-create event/task at that time
+
+FocusScreen
+  Before session:
+    - Mode picker: Pomodoro | Deep Work | Flow | Custom
+    - Task selector (optional): search tasks, pick one
+    - Duration: pre-set buttons (25, 45, 60 min) or custom slider
+    - Ambient sound picker: icons for lo-fi / rain / cafe / silence
+    - "Start Focus" CTA
+  During session (SessionActiveScreen):
+    - Full-screen animated ring timer (react-native-reanimated SVG)
+    - Current task title displayed
+    - Ambient audio playing in background
+    - Break indicator for Pomodoro mode
+    - Distraction counter: tap to log a distraction
+    - End early button → confirmation + reflection prompt
+  After session:
+    - Session summary: duration, distractions, focus quality score
+    - Note field (optional)
+    - Quick button: "Start another" or "Done for now"
+
+AICopilotScreen
+  Layout: Chat interface (GiftedChat)
+  Quick action chips at top:
+    "What's my day?" | "Am I overloaded?" | "Schedule my tasks" |
+    "Summarize last meeting" | "What should I work on now?"
+  Streaming: tokens appear word-by-word (SSE)
+  Structured responses: AI can return JSON-embedded cards
+    TaskCard, EventCard, InsightCard rendered inside chat bubbles
+  Conversation is stateless per session (not persisted to DB)
+  Context window: last 20 messages + server-side system context
+
+
+================================================================================
+11. STATE MANAGEMENT
+================================================================================
+
+--- ZUSTAND STORES ---
+
+authStore
+  State: { user: User | null, accessToken: string | null, isLoading: boolean }
+  Actions: setUser, setToken, logout, refreshToken
+  Persistence: accessToken stored in SecureStore (Expo)
+
+appStore
+  State: {
+    theme: 'light' | 'dark' | 'system',
+    offlineQueue: MutationItem[],
+    isOnline: boolean,
+    lastSyncedAt: Date | null
+  }
+  Actions: setTheme, enqueueOfflineMutation, flushOfflineQueue, setOnline
+
+focusStore
+  State: {
+    activeSession: FocusSession | null,
+    timerState: 'idle' | 'running' | 'paused' | 'break',
+    secondsRemaining: number,
+    distractionCount: number
+  }
+  Actions: startSession, pauseSession, resumeSession, endSession, logDistraction
+
+--- REACT QUERY SETUP ---
+
+QueryClient config:
+  staleTime: 60 * 1000         (1 minute)
+  gcTime: 5 * 60 * 1000        (5 minutes)
+  retry: 2
+  refetchOnWindowFocus: false
+
+Key conventions:
+  ['tasks', filters]           — task list
+  ['task', id]                 — single task
+  ['calendar', start, end]     — calendar events
+  ['habits']                   — habits list
+  ['insights']                 — AI insights
+  ['user', 'me']               — current user
+
+Optimistic updates pattern (example — complete task):
+  1. Cancel any pending queries for ['tasks']
+  2. Snapshot previous data
+  3. Optimistically update cache (status = DONE)
+  4. Make API call
+  5. On error: rollback to snapshot + show toast
+  6. On success: invalidate ['tasks'] to refetch
+
+
+================================================================================
+12. INTEGRATION GUIDE
+================================================================================
+
+--- GOOGLE CALENDAR ---
+
+OAuth Scopes:
+  https://www.googleapis.com/auth/calendar.readonly
+  https://www.googleapis.com/auth/calendar.events
+
+Sync Strategy:
+  1. Initial sync: fetch all events from -30 days to +90 days
+  2. Incremental sync: use syncToken from previous response
+  3. Webhook: register Google Channel push notification
+     - Endpoint: POST /webhooks/google/calendar
+     - On notification: queue calendar-sync job for user
+
+Conflict handling:
+  - External events take precedence (never modify in Google)
+  - Detect overlap: if internal event startAt..endAt overlaps external,
+    create SUGGESTION AIInsight
+
+Token refresh:
+  - Google refresh token stored encrypted
+  - Auto-refreshed by Integration service before each sync
+  - If refresh fails: mark integration inactive, notify user
+
+--- GMAIL ---
+
+OAuth Scopes:
+  https://www.googleapis.com/auth/gmail.readonly
+  https://www.googleapis.com/auth/gmail.send
+
+Email → Task:
+  - Webhook via Gmail push notification to /webhooks/google/gmail
+  - AI parses subject + body for action items
+  - Creates Task (status=INBOX) with email thread reference in metadata
+
+--- SLACK ---
+
+Scopes: channels:read, chat:write, users:read, commands
+
+Slash command: /apex [text]
+  - Registered in Slack app manifest
+  - Handler: POST /webhooks/slack/command
+  - Creates task from text, replies with confirmation
+
+Outgoing notification:
+  - When task completed: optional Slack message to configured channel
+  - Format: "✅ {taskTitle} marked done by {userName}"
+
+--- MICROSOFT GRAPH (Outlook/Teams) ---
+
+Scopes:
+  Calendars.ReadWrite, Mail.ReadWrite, User.Read
+
+Same sync pattern as Google Calendar.
+Teams meeting URL auto-detected in event body and stored in meetingUrl field.
+
+
+================================================================================
+13. AUTHENTICATION & SECURITY
+================================================================================
+
+--- JWT STRATEGY ---
+
+Access Token:
+  Algorithm: RS256 (asymmetric, 2048-bit key pair)
+  Expiry: 15 minutes
+  Payload: { sub: userId, email, iat, exp }
+  Storage: in-memory (Zustand), NOT in AsyncStorage
+
+Refresh Token:
+  Algorithm: HS256
+  Expiry: 30 days
+  Storage (mobile): Expo SecureStore
+  Storage (server): hashed in RefreshSession table
+  Rotation: new refresh token issued on every use
+
+--- PASSWORD SECURITY ---
+
+Hashing: bcrypt (cost factor 12)
+Reset flow:
+  1. POST /auth/forgot-password → generate signed 1-hour token, email link
+  2. POST /auth/reset-password  → verify token, update hash, invalidate all
+     existing refresh sessions
+
+--- OAUTH TOKENS ---
+
+All third-party access/refresh tokens encrypted at rest:
+  Algorithm: AES-256-GCM
+  Key: APP_ENCRYPTION_KEY from environment
+  IV: random 16 bytes, stored alongside ciphertext
+
+--- RATE LIMITING ---
+
+express-rate-limit config:
+  /auth/*          : 10 requests / 15 minutes per IP
+  /ai/chat         : 60 requests / hour per user
+  /api/*           : 200 requests / minute per user
+  Global           : 1000 requests / minute per IP
+
+--- HTTP SECURITY HEADERS (Helmet.js) ---
+
+Content-Security-Policy: default-src 'self'
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Referrer-Policy: strict-origin-when-cross-origin
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+
+--- INPUT VALIDATION ---
+
+All request bodies validated with Zod schemas before hitting controllers.
+File uploads: mime-type verification + 10MB size limit.
+SQL injection: not possible (Prisma parameterized queries).
+
+--- GDPR ---
+
+Data export: GET /user/me/export → returns JSON of all user data
+Account deletion: DELETE /user/me
+  → soft-deletes user, queues full cascade deletion job (30-day delay)
+  → removes all OAuth tokens immediately
+  → sends confirmation email
+
+
+================================================================================
+14. OFFLINE SUPPORT
+================================================================================
+
+Strategy: Offline-first with sync-on-reconnect
+
+--- WHAT WORKS OFFLINE ---
+
+  Full functionality:  Tasks (create, edit, complete), Habits (log entry),
+                       Focus sessions (start, run, end), Quick Capture
+  Read-only cached:    Calendar events, Projects, AI Insights (last fetched)
+  Unavailable:         AI Copilot, Calendar sync, Integration actions
+
+--- OFFLINE QUEUE ---
+
+Implementation: Zustand appStore.offlineQueue (persisted via AsyncStorage)
+
+Queue item shape:
+  { id: uuid, method: 'POST'|'PATCH'|'DELETE', url: string,
+    body: object, timestamp: number, retries: number }
+
+On mutation while offline:
+  1. Apply optimistically to React Query cache
+  2. Push to offlineQueue in appStore
+  3. Show "saved locally" indicator
+
+On network reconnect (NetInfo event):
+  1. Process queue in order (FIFO)
+  2. For each item: make API call
+  3. On success: remove from queue, resolve local state
+  4. On 409 conflict: prompt user to resolve
+  5. On persistent failure: show error with retry option
+
+Conflict resolution:
+  - Server timestamp wins for CalendarEvents
+  - Last-write-wins for Task edits (by updatedAt)
+  - Habit entries: client always wins (user intent)
+
+
+================================================================================
+15. PUSH NOTIFICATIONS
+================================================================================
+
+Provider: Firebase Cloud Messaging (FCM)
+Library (mobile): @react-native-firebase/messaging
+
+--- NOTIFICATION CATEGORIES ---
+
+TASK_DUE_SOON       — 1 hour before task deadline
+TASK_OVERDUE        — task missed deadline
+HABIT_REMINDER      — daily habit reminder at user-set time
+HABIT_STREAK_RISK   — "Log your habit to keep your 7-day streak!"
+MEETING_PREP        — 5 min before calendar event
+AI_INSIGHT          — new high-priority insight
+FOCUS_REMINDER      — "Your focus block starts in 5 min"
+WEEKLY_RECAP        — Sunday evening recap ready
+CALENDAR_SYNCED     — sync completed notification (optional, user can disable)
+
+--- DEVICE TOKEN MANAGEMENT ---
+
+1. On app launch: request permission, get FCM token
+2. POST /notifications/device-token { token, platform: 'ios'|'android' }
+3. Tokens stored in User.fcmTokens (array, supports multi-device)
+4. Token refresh: handled by FCM SDK, re-registers automatically
+
+--- NOTIFICATION PAYLOAD ---
+
+{
+  "to": "<fcmToken>",
+  "notification": {
+    "title": "Meeting in 5 minutes",
+    "body": "Design Review — prep brief ready"
+  },
+  "data": {
+    "type": "MEETING_PREP",
+    "eventId": "clx123...",
+    "deepLink": "apex://calendar/events/clx123"
+  },
+  "apns": { "payload": { "aps": { "badge": 1, "sound": "default" } } }
+}
+
+Deep links (handled by React Navigation):
+  apex://tasks/:id          → TaskDetailScreen
+  apex://calendar/events/:id → EventDetailScreen
+  apex://focus              → FocusScreen
+  apex://ai/insights/:id    → InsightsScreen
+
+
+================================================================================
+16. ENVIRONMENT VARIABLES
+================================================================================
+
+--- apps/backend/.env ---
+
+  # Server
+  PORT=3000
+  NODE_ENV=development
+
+  # Database
+  DATABASE_URL=postgresql://user:password@localhost:5432/apex
+
+  # Redis
+  REDIS_URL=redis://localhost:6379
+
+  # JWT
+  JWT_PRIVATE_KEY=<RSA private key PEM>
+  JWT_PUBLIC_KEY=<RSA public key PEM>
+  JWT_REFRESH_SECRET=<random 64-char hex>
+
+  # Encryption (for OAuth tokens)
+  APP_ENCRYPTION_KEY=<random 32-char hex>
+
+  # AI
+  ANTHROPIC_API_KEY=sk-ant-...
+
+  # Google OAuth + Calendar + Gmail
+  GOOGLE_CLIENT_ID=
+  GOOGLE_CLIENT_SECRET=
+  GOOGLE_REDIRECT_URI=https://api.apexapp.io/api/auth/oauth/google
+
+  # Microsoft OAuth
+  MICROSOFT_CLIENT_ID=
+  MICROSOFT_CLIENT_SECRET=
+  MICROSOFT_REDIRECT_URI=
+
+  # Slack
+  SLACK_CLIENT_ID=
+  SLACK_CLIENT_SECRET=
+  SLACK_SIGNING_SECRET=
+
+  # GitHub
+  GITHUB_CLIENT_ID=
+  GITHUB_CLIENT_SECRET=
+
+  # AWS
+  AWS_REGION=ap-south-1
+  AWS_ACCESS_KEY_ID=
+  AWS_SECRET_ACCESS_KEY=
+  S3_BUCKET_NAME=apex-attachments
+
+  # Firebase Admin
+  FIREBASE_PROJECT_ID=
+  FIREBASE_PRIVATE_KEY=
+  FIREBASE_CLIENT_EMAIL=
+
+  # Email (SES)
+  SES_FROM_EMAIL=noreply@apexapp.io
+  SES_REGION=ap-south-1
+
+  # Frontend URL (for CORS + email links)
+  FRONTEND_URL=https://apexapp.io
+
+  # Sentry
+  SENTRY_DSN=
+
+--- apps/mobile/.env ---
+
+  EXPO_PUBLIC_API_URL=https://api.apexapp.io
+  EXPO_PUBLIC_SOCKET_URL=wss://api.apexapp.io
+  EXPO_PUBLIC_GOOGLE_CLIENT_ID=<iOS client ID from Google Console>
+
+
+================================================================================
+17. DEPLOYMENT
+================================================================================
+
+--- DOCKER COMPOSE (development) ---
+
+Services:
+  postgres    : postgres:16-alpine, port 5432, volume for data
+  redis       : redis:7-alpine, port 6379
+  api         : built from apps/backend, port 3000, hot reload
+  worker      : same image as api, runs BullMQ workers only
+
+Commands:
+  docker compose up -d          — start all services
+  docker compose logs -f api    — tail API logs
+  npx prisma migrate dev        — run migrations inside api container
+
+--- PRODUCTION (AWS) ---
+
+Infrastructure:
+  EC2 t3.medium   : Express API (2 instances behind ALB)
+  EC2 t3.small    : BullMQ worker process (separate from API)
+  RDS db.t3.medium: PostgreSQL 16 (Multi-AZ)
+  ElastiCache     : Redis 7 (cluster mode)
+  S3              : attachments bucket (private, CloudFront CDN)
+  CloudFront      : CDN for S3 assets
+  Route 53        : DNS, api.apexapp.io
+
+Process manager: PM2
+  ecosystem.config.js defines:
+    app:api     — runs express server (2 instances)
+    app:worker  — runs BullMQ workers (1 instance)
+
+Deployment steps:
+  1. git push to main → GitHub Actions CI runs tests
+  2. On pass: build Docker image, push to ECR
+  3. ECS rolling deployment (or SSH + PM2 reload for simpler setup)
+  4. Run prisma migrate deploy as part of deployment
+
+--- MOBILE ---
+
+  iOS:   Expo EAS Build → TestFlight → App Store
+  Android: Expo EAS Build → Internal track → Play Store
+
+  eas.json profiles:
+    development: local simulator build
+    preview: internal distribution APK/IPA
+    production: App Store / Play Store signed build
+
+
+================================================================================
+18. TESTING STRATEGY
+================================================================================
+
+--- BACKEND UNIT TESTS (Jest) ---
+
+Coverage target: 80% lines
+
+Test files mirror source:
+  src/services/__tests__/task.service.test.ts
+  packages/ai-service/src/__tests__/scoring.test.ts
+
+Mock strategy:
+  - Prisma: jest mock (prisma-mock or manual jest.fn())
+  - Claude API: mock @anthropic-ai/sdk with fixture responses
+  - Redis: ioredis-mock
+  - S3: aws-sdk-mock
+
+Key test suites:
+  - AuthService: register, login, token refresh, token rotation
+  - TaskService: CRUD, priority scoring, dependency validation
+  - AI Service: all 10 functions with mocked Claude responses
+  - BullMQ jobs: each processor with mock queue
+
+--- BACKEND INTEGRATION TESTS (Supertest) ---
+
+Test DB: dedicated test PostgreSQL DB, migrated fresh per test suite
+Setup: beforeAll → migrate, seed minimal data
+Teardown: afterAll → truncate all tables
+
+Example flow:
+  describe('POST /tasks', () => {
+    it('creates task and returns with AI scoring pending', ...)
+    it('returns 400 for missing title', ...)
+    it('returns 401 without auth token', ...)
+  })
+
+--- MOBILE TESTS (RNTL + Jest) ---
+
+Setup: @testing-library/react-native + jest-expo preset
+
+Component tests:
+  - TodayScreen: renders energy check-in, events, priorities
+  - TaskCard: swipe to complete triggers mutation
+  - FocusScreen: timer counts down, end session shows reflection
+
+Hook tests:
+  - useTasks: returns correct data, optimistic update works
+  - useAICopilot: SSE stream parsed correctly
+
+Store tests:
+  - focusStore: state transitions (idle→running→paused→ended)
+  - authStore: token storage and logout cleanup
+
+--- CI PIPELINE (.github/workflows/ci.yml) ---
+
+Triggers: push to main, PR to main
+
+Jobs:
+  1. lint: ESLint + TypeScript check (all workspaces)
+  2. test-backend: Jest with PostgreSQL service container
+  3. test-mobile: Jest with mocked native modules
+  4. build-backend: tsc --noEmit
+  5. build-mobile: expo export --platform all (type check)
+
+
+================================================================================
+19. PERFORMANCE GUIDELINES
+================================================================================
+
+--- BACKEND ---
+
+Database:
+  - Index all foreign keys (Prisma does this automatically)
+  - Composite index on Task(userId, status, dueDate) for list queries
+  - Index on CalendarEvent(userId, startAt, endAt) for date range queries
+  - Use select in Prisma queries — never fetch all fields for list views
+  - Pagination required on all list endpoints (max 50 per page)
+
+Caching (Redis):
+  - Cache today's events per user: TTL 5 minutes (key: calendar:userId:YYYY-MM-DD)
+  - Cache AI priority scores: TTL 1 hour (key: task:priority:taskId)
+  - Cache user context for AI: TTL 2 minutes (key: ai:context:userId)
+
+Response targets:
+  - List endpoints: < 150ms (p95)
+  - Task create (without AI): < 100ms
+  - AI chat first token: < 800ms
+  - Calendar sync: < 30s per user
+
+--- MOBILE ---
+
+Render performance:
+  - Use FlashList (Shopify) instead of FlatList for task/calendar lists
+  - Memoize task cards (React.memo + stable key props)
+  - Avoid anonymous functions in render (useCallback for handlers)
+  - Use Reanimated worklets for timer — stays on UI thread
+  - Images: use Expo Image with caching + blur hash placeholders
+
+Bundle size:
+  - Code-split by screen using React Navigation's lazy loading
+  - Avoid importing entire icon sets — use tree-shakeable imports
+
+Battery / network:
+  - Background calendar sync: only when app in foreground or on Wi-Fi
+  - Socket.IO: reconnect with exponential backoff (avoid hammering server)
+  - React Query: staleTime=60s to prevent over-fetching
+
+
+================================================================================
+20. VERSIONING & CHANGELOG
+================================================================================
+
+API versioning: URL-based (/api/v1/...)
+  - Current version: v1
+  - Breaking changes require new version prefix
+
+Semantic versioning for packages (semver):
+  Major: breaking API change
+  Minor: new feature, backward compatible
+  Patch: bug fix
+
+Mobile app versioning:
+  - Version in app.json (e.g. 1.2.0)
+  - Build number increments per release (EAS handles this)
+
+--- CHANGELOG ---
+
+v1.0.0 (Initial Release)
+  + All core modules: Tasks, Calendar, Habits, Focus, AI Copilot
+  + Google Calendar + Gmail integration
+  + Offline support for Tasks, Habits, Focus
+  + Real-time sync via Socket.IO
+  + Push notifications (FCM)
+  + Proactive AI insights (nightly job)
+  + Weekly recap generation
+  + BullMQ background job infrastructure
+
+Planned: v1.1.0
+  - Microsoft Outlook + Teams integration
+  - Slack slash command integration
+  - GitHub issues sync
+  - Voice Quick Capture (Whisper transcription)
+  - Apple Health energy correlation
+  - Collaborative project sharing (multi-user)
+  - Web app (React Native Web)
+
+
+================================================================================
+END OF TECHNICAL DOCUMENTATION
+================================================================================
