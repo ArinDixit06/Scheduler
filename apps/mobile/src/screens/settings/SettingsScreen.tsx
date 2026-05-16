@@ -1,23 +1,32 @@
-import { Button, Text, View } from 'react-native';
+import { Pressable, Text } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { ScreenShell } from '../../components/common/ScreenShell';
+import { Panel, SectionTitle, TeslaButton, uiStyles } from '../../components/common/TeslaUI';
 import { useAuthStore } from '../../store/authStore';
 import { useAppStore } from '../../store/appStore';
 
 export function SettingsScreen() {
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const signOut = useAuthStore((s) => s.signOut);
+  const theme = useAppStore((s) => s.theme);
   const setTheme = useAppStore((s) => s.setTheme);
+
   return (
-    <ScreenShell title="Settings" subtitle="Integrations, notifications, theme, export, and account controls.">
-      <View style={section}>
-        <Text style={item}>Theme</Text>
-        <Button title="Light" onPress={() => setTheme('light')} />
-        <Button title="Dark" onPress={() => setTheme('dark')} />
-        <Button title="System" onPress={() => setTheme('system')} />
-        <Button title="Sign Out" onPress={signOut} />
-      </View>
+    <ScreenShell title="Settings" subtitle="Theme controls, analytics, notifications, integrations, and sign-out now work.">
+      <Panel>
+        <SectionTitle title="Theme" />
+        <Text style={uiStyles.body}>Current mode: {theme}</Text>
+        <TeslaButton label="Light" onPress={() => setTheme('light')} />
+        <TeslaButton label="Dark" variant="secondary" onPress={() => setTheme('dark')} />
+      </Panel>
+      <Panel>
+        <SectionTitle title="System" />
+        <Pressable onPress={() => navigation.navigate('Integrations')}><Text style={uiStyles.itemTitle}>Integrations</Text></Pressable>
+        <Pressable onPress={() => navigation.navigate('NotificationSettings')}><Text style={uiStyles.itemTitle}>Notifications</Text></Pressable>
+        <Pressable onPress={() => navigation.navigate('AnalyticsDashboard')}><Text style={uiStyles.itemTitle}>Analytics</Text></Pressable>
+      </Panel>
+      <TeslaButton label="Sign Out" variant="secondary" onPress={signOut} />
     </ScreenShell>
   );
 }
-
-const section = { gap: 8, padding: 16, borderRadius: 18, backgroundColor: '#111933' };
-const item = { color: '#d8def0' };
