@@ -19,18 +19,20 @@ import { fetchGroqChatResponse, saveConversationHistory, loadConversationHistory
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+type SuggestionData = {
+  id: string;
+  title: string;
+  startAt: string;
+  endAt: string;
+  description: string;
+  scheduled?: boolean;
+};
+
 type Message = {
   id: string;
   role: 'user' | 'assistant';
   text: string;
-  isCardSuggestion?: boolean;
-  suggestionData?: {
-    title: string;
-    startAt: string;
-    endAt: string;
-    description: string;
-    scheduled?: boolean;
-  };
+  suggestions?: SuggestionData[];
 };
 
 const QUICK_ACTIONS = [
@@ -151,41 +153,47 @@ export function AICopilotScreen() {
     };
   };
 
-  // Card suggestion parser (looks for [SUGGESTION:EVENT] blocks)
+  // Card suggestion parser (looks for ALL [SUGGESTION:EVENT] ... [/SUGGESTION] blocks)
   const parseResponseForCard = (rawText: string): Message => {
     const suggestionTag = '[SUGGESTION:EVENT]';
     const closeSuggestionTag = '[/SUGGESTION]';
 
-    if (rawText.includes(suggestionTag) && rawText.includes(closeSuggestionTag)) {
-      const parts = rawText.split(suggestionTag);
-      const preText = parts[0].trim();
-      const nextParts = parts[1].split(closeSuggestionTag);
-      const jsonContent = nextParts[0].trim();
-      
+    const suggestions: SuggestionData[] = [];
+    let cleanText = rawText;
+    let startIndex = cleanText.indexOf(suggestionTag);
+    let idCounter = 1;
+
+    while (startIndex !== -1) {
+      const endIndex = cleanText.indexOf(closeSuggestionTag, startIndex);
+      if (endIndex === -1) break;
+
+      const tagBlock = cleanText.substring(startIndex, endIndex + closeSuggestionTag.length);
+      const jsonContent = cleanText.substring(startIndex + suggestionTag.length, endIndex).trim();
+
       try {
         const data = JSON.parse(jsonContent);
-        return {
-          id: `msg_${Date.now()}`,
-          role: 'assistant',
-          text: preText,
-          isCardSuggestion: true,
-          suggestionData: {
-            title: data.title || 'AI Focus Block',
-            startAt: data.startAt || '12:00',
-            endAt: data.endAt || '13:00',
-            description: data.description || 'Recommended focus slot',
-            scheduled: false
-          }
-        };
+        suggestions.push({
+          id: `sug_${Date.now()}_${idCounter++}`,
+          title: data.title || 'AI Focus Block',
+          startAt: data.startAt || '12:00',
+          endAt: data.endAt || '13:00',
+          description: data.description || 'Recommended focus slot',
+          scheduled: false
+        });
       } catch (err) {
         console.error('Failed to parse suggestion JSON:', err);
       }
+
+      // Remove the tag block from the display text
+      cleanText = cleanText.replace(tagBlock, '');
+      startIndex = cleanText.indexOf(suggestionTag);
     }
 
     return {
       id: `msg_${Date.now()}`,
       role: 'assistant',
-      text: rawText
+      text: cleanText.trim(),
+      suggestions: suggestions.length > 0 ? suggestions : undefined
     };
   };
 
@@ -227,20 +235,20 @@ export function AICopilotScreen() {
   };
 
   // Accept/Add Event to calendar
-  const handleAcceptSuggestion = (msgId: string, eventData: any) => {
+  const handleAcceptSuggestion = (msgId: string, sugId: string, eventData: any) => {
     Vibration.vibrate([0, 15, 30]); // success chime vibration
     addEventStore(eventData.title, eventData.startAt, eventData.endAt, 'INTERNAL');
 
-    // Update message card state to "Scheduled"
+    // Update message card state to "Scheduled" for this specific suggestion
     setMessages(prev =>
       prev.map(m => {
         if (m.id !== msgId) return m;
         return {
           ...m,
-          suggestionData: {
-            ...m.suggestionData!,
-            scheduled: true
-          }
+          suggestions: m.suggestions?.map(s => {
+            if (s.id !== sugId) return s;
+            return { ...s, scheduled: true };
+          })
         };
       })
     );
@@ -293,6 +301,13 @@ export function AICopilotScreen() {
         <View style={styles.topBarRight}>
           <Pressable
             onPress={() => setIsClearAlertVisible(true)}
+            style={styles.newChatButton}
+            android_ripple={{ color: colors.border }}
+          >
+            <Text style={styles.newChatButtonText}>New Chat ➕</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setIsClearAlertVisible(true)}
             style={styles.menuIconCell}
             android_ripple={{ color: colors.border }}
           >
@@ -337,40 +352,40 @@ export function AICopilotScreen() {
                   </Text>
                 </Pressable>
 
-                {/* Structured Event recommendation Card reply inside bubble wrapper */}
-                {msg.isCardSuggestion && msg.suggestionData && (
-                  <View style={styles.cardReplyContainer}>
+                {/* Structured Event recommendation Card replies inside bubble wrapper */}
+                {msg.suggestions && msg.suggestions.map((sug) => (
+                  <View key={sug.id} style={styles.cardReplyContainer}>
                     <View style={styles.cardIndicatorLine} />
                     <View style={styles.cardReplyBody}>
-                      <Text style={styles.cardReplyTitle}>{msg.suggestionData.title}</Text>
+                      <Text style={styles.cardReplyTitle}>{sug.title}</Text>
                       
                       <View style={styles.cardTimeRow}>
-                        <Text style={styles.cardTimeText}>⏱️ {msg.suggestionData.startAt} – {msg.suggestionData.endAt}</Text>
+                        <Text style={styles.cardTimeText}>⏱️ {sug.startAt} – {sug.endAt}</Text>
                       </View>
 
-                      {msg.suggestionData.description ? (
-                        <Text style={styles.cardDescText}>{msg.suggestionData.description}</Text>
+                      {sug.description ? (
+                        <Text style={styles.cardDescText}>{sug.description}</Text>
                       ) : null}
 
                       {/* Accept/Add button */}
                       <Pressable
-                        disabled={msg.suggestionData.scheduled}
-                        onPress={() => handleAcceptSuggestion(msg.id, msg.suggestionData)}
+                        disabled={sug.scheduled}
+                        onPress={() => handleAcceptSuggestion(msg.id, sug.id, sug)}
                         style={[
                           styles.cardAcceptButton,
-                          msg.suggestionData.scheduled && styles.cardAcceptButtonDisabled
+                          sug.scheduled && styles.cardAcceptButtonDisabled
                         ]}
                       >
                         <Text style={[
                           styles.cardAcceptButtonText,
-                          msg.suggestionData.scheduled && styles.cardAcceptButtonTextDisabled
+                          sug.scheduled && styles.cardAcceptButtonTextDisabled
                         ]}>
-                          {msg.suggestionData.scheduled ? 'Scheduled ✓' : 'Add to Calendar / Accept'}
+                          {sug.scheduled ? 'Scheduled ✓' : 'Add to Calendar / Accept'}
                         </Text>
                       </Pressable>
                     </View>
                   </View>
-                )}
+                ))}
               </View>
             </View>
           );
@@ -623,6 +638,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSecondary,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  newChatButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8
+  },
+  newChatButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textPrimary
   },
   menuIcon: {
     fontSize: 16

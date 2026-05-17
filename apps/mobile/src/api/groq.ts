@@ -87,6 +87,9 @@ export async function fetchGroqChatResponse(
   chatHistory: { role: 'user' | 'assistant'; content: string }[],
   appState: AppRAGState
 ): Promise<string> {
+  if (!GROQ_API_KEY) {
+    console.warn('[Groq Client] Warning: GROQ_API_KEY is empty. Please ensure EXPO_PUBLIC_GROQ_API_KEY is defined in apps/mobile/.env and restart your Expo server.');
+  }
   const userPrompt = chatHistory[chatHistory.length - 1]?.content || '';
   
   // 1. Check local cache
@@ -146,7 +149,7 @@ Keep recommendations realistic. Do not overlap with their existing scheduled eve
     const response = await axios.post(
       GROQ_API_URL,
       {
-        model: 'llama-3.3-70b-specdec', // Using Groq's high-capacity, lightning fast reasoning model
+        model: 'llama-3.3-70b-versatile', // Using Groq's high-capacity, lightning fast reasoning model
         messages: messagesToSend,
         temperature: 0.7,
         max_tokens: 1024,
@@ -156,7 +159,7 @@ Keep recommendations realistic. Do not overlap with their existing scheduled eve
           'Authorization': `Bearer ${GROQ_API_KEY}`,
           'Content-Type': 'application/json',
         },
-        timeout: 12000
+        timeout: 30000
       }
     );
 
@@ -172,13 +175,13 @@ Keep recommendations realistic. Do not overlap with their existing scheduled eve
   } catch (error: any) {
     console.error('[Groq Client] Error querying Groq API:', error?.response?.data || error.message);
     
-    // Attempt fallback with llama3-8b-8192 if the primary fails or is rate-limited
+    // Attempt fallback with llama-3.1-8b-instant if the primary fails or is rate-limited
     try {
-      console.log('[Groq Client] Attempting fallback model llama3-8b-8192...');
+      console.log('[Groq Client] Attempting fallback model llama-3.1-8b-instant...');
       const response = await axios.post(
         GROQ_API_URL,
         {
-          model: 'llama3-8b-8192',
+          model: 'llama-3.1-8b-instant',
           messages: [
             systemMessage,
             ...chatHistory.map(msg => ({ role: msg.role, content: msg.content }))
@@ -191,7 +194,7 @@ Keep recommendations realistic. Do not overlap with their existing scheduled eve
             'Authorization': `Bearer ${GROQ_API_KEY}`,
             'Content-Type': 'application/json',
           },
-          timeout: 10000
+          timeout: 25000
         }
       );
       const responseText = response.data?.choices?.[0]?.message?.content || '';

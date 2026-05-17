@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { usePlannerStore } from '../../store/plannerStore';
 import { colors } from '../../constants/colors';
+import { useFocusStore } from '../../store/focusStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -26,25 +27,30 @@ export function FocusScreen() {
   const focusHistory = usePlannerStore((s) => s.focusHistory);
   const addFocusSession = usePlannerStore((s) => s.addFocusSession);
 
-  // Stepper settings states
-  const [focusSetting, setFocusSetting] = useState(25);      // 5-60 min
-  const [shortBreakSetting, setShortBreakSetting] = useState(5); // 1-15 min
-  const [longBreakSetting, setLongBreakSetting] = useState(15);  // 5-30 min
+  const {
+    focusSetting,
+    shortBreakSetting,
+    longBreakSetting,
+    currentPhase,
+    secondsLeft,
+    isRunning,
+    completedSessions,
+    linkedTaskName,
+    setFocusSetting,
+    setShortBreakSetting,
+    setLongBreakSetting,
+    setLinkedTaskName,
+    startTimer,
+    pauseTimer,
+    resetTimer,
+    skipPhase
+  } = useFocusStore();
 
-  // Active Timer state
-  const [currentPhase, setCurrentPhase] = useState<Phase>('Focus');
-  const [secondsLeft, setSecondsLeft] = useState(focusSetting * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [completedSessions, setCompletedSessions] = useState(0);
-
-  // Linked Task state
-  const [linkedTaskName, setLinkedTaskName] = useState<string | null>(null);
   const [isTaskPickerVisible, setIsTaskPickerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Daily statistics summary
   const stats = useMemo(() => {
-    // Calculate total focus minutes completed
     const totalMinutes = focusHistory.reduce((acc, f) => acc + f.plannedMinutes, 0);
     return {
       minutes: totalMinutes,
@@ -67,7 +73,6 @@ export function FocusScreen() {
     let dotLoop: Animated.CompositeAnimation | null = null;
 
     if (isRunning) {
-      // 1. Halo Breathe loop
       animationLoop = Animated.loop(
         Animated.parallel([
           Animated.sequence([
@@ -90,7 +95,6 @@ export function FocusScreen() {
       );
       animationLoop.start();
 
-      // 2. Pulse active dot loop
       dotLoop = Animated.loop(
         Animated.sequence([
           Animated.timing(dotPulse, { toValue: 1.0, duration: 1000, useNativeDriver: true }),
@@ -99,7 +103,6 @@ export function FocusScreen() {
       );
       dotLoop.start();
     } else {
-      // Stop and reset positions
       haloScale1.setValue(1);
       haloOpacity1.setValue(0.1);
       haloScale2.setValue(1);
@@ -115,108 +118,13 @@ export function FocusScreen() {
     };
   }, [isRunning]);
 
-  // Synchronize Settings changes to seconds left when timer is idle
-  useEffect(() => {
-    if (!isRunning) {
-      if (currentPhase === 'Focus') {
-        setSecondsLeft(focusSetting * 60);
-      } else if (currentPhase === 'Short Break') {
-        setSecondsLeft(shortBreakSetting * 60);
-      } else {
-        setSecondsLeft(longBreakSetting * 60);
-      }
-    }
-  }, [focusSetting, shortBreakSetting, longBreakSetting, currentPhase, isRunning]);
-
-  // Core Timer Interval tick
-  useEffect(() => {
-    let interval: any = null;
-    if (isRunning) {
-      interval = setInterval(() => {
-        setSecondsLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval);
-            handlePhaseCompletion();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      clearInterval(interval);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning, currentPhase, focusSetting, shortBreakSetting, longBreakSetting]);
-
-  // Handle phase completed
-  const handlePhaseCompletion = () => {
-    setIsRunning(false);
-
-    // Vibration alarm sequence
-    Vibration.vibrate([0, 500, 200, 500]);
-
-    if (currentPhase === 'Focus') {
-      const nextSessionCount = completedSessions + 1;
-      setCompletedSessions(nextSessionCount);
-
-      // Log Focus Session in store
-      addFocusSession({
-        id: `f_${Date.now()}`,
-        mode: 'POMODORO',
-        taskTitle: linkedTaskName || 'General Focus Block',
-        plannedMinutes: focusSetting,
-        completedAt: 'Just now',
-        reflection: 'Completed standard focus session.'
-      });
-
-      // Auto switch phase
-      if (nextSessionCount % 4 === 0) {
-        // Trigger Long Break after 4 sessions
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setCurrentPhase('Long Break');
-        setSecondsLeft(longBreakSetting * 60);
-      } else {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-        setCurrentPhase('Short Break');
-        setSecondsLeft(shortBreakSetting * 60);
-      }
-    } else {
-      // Transition from Break back to Focus
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setCurrentPhase('Focus');
-      setSecondsLeft(focusSetting * 60);
-    }
-  };
-
-  // Skip Active Phase
   const handleSkipPhase = () => {
-    Vibration.vibrate(10);
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    if (currentPhase === 'Focus') {
-      setCompletedSessions((prev) => prev + 1);
-      setCurrentPhase('Short Break');
-      setSecondsLeft(shortBreakSetting * 60);
-    } else if (currentPhase === 'Short Break') {
-      setCurrentPhase('Focus');
-      setSecondsLeft(focusSetting * 60);
-    } else {
-      setCurrentPhase('Focus');
-      setSecondsLeft(focusSetting * 60);
-    }
-    setIsRunning(false);
+    skipPhase();
   };
 
-  // Reset Active Timer
   const handleResetTimer = () => {
     Vibration.vibrate(8);
-    setIsRunning(false);
-    if (currentPhase === 'Focus') {
-      setSecondsLeft(focusSetting * 60);
-    } else if (currentPhase === 'Short Break') {
-      setSecondsLeft(shortBreakSetting * 60);
-    } else {
-      setSecondsLeft(longBreakSetting * 60);
-    }
+    resetTimer();
   };
 
   // Format seconds to MM:SS
@@ -321,8 +229,12 @@ export function FocusScreen() {
 
           <Pressable
             onPress={() => {
-              setIsRunning(!isRunning);
               Vibration.vibrate(10);
+              if (isRunning) {
+                pauseTimer();
+              } else {
+                startTimer();
+              }
             }}
             style={[styles.controlPill, styles.controlPillPrimary]}
           >
@@ -379,7 +291,7 @@ export function FocusScreen() {
             <View style={styles.stepperContainer}>
               <Pressable
                 disabled={isRunning}
-                onPress={() => setFocusSetting(prev => Math.max(5, prev - 5))}
+                onPress={() => setFocusSetting(Math.max(5, focusSetting - 5))}
                 style={[styles.stepperButton, isRunning && styles.stepperButtonDisabled]}
               >
                 <Text style={styles.stepperButtonText}>-</Text>
@@ -387,7 +299,7 @@ export function FocusScreen() {
               <Text style={styles.stepperValueText}>{focusSetting}m</Text>
               <Pressable
                 disabled={isRunning}
-                onPress={() => setFocusSetting(prev => Math.min(60, prev + 5))}
+                onPress={() => setFocusSetting(Math.min(60, focusSetting + 5))}
                 style={[styles.stepperButton, isRunning && styles.stepperButtonDisabled]}
               >
                 <Text style={styles.stepperButtonText}>+</Text>
@@ -401,7 +313,7 @@ export function FocusScreen() {
             <View style={styles.stepperContainer}>
               <Pressable
                 disabled={isRunning}
-                onPress={() => setShortBreakSetting(prev => Math.max(1, prev - 1))}
+                onPress={() => setShortBreakSetting(Math.max(1, shortBreakSetting - 1))}
                 style={[styles.stepperButton, isRunning && styles.stepperButtonDisabled]}
               >
                 <Text style={styles.stepperButtonText}>-</Text>
@@ -409,7 +321,7 @@ export function FocusScreen() {
               <Text style={styles.stepperValueText}>{shortBreakSetting}m</Text>
               <Pressable
                 disabled={isRunning}
-                onPress={() => setShortBreakSetting(prev => Math.min(15, prev + 1))}
+                onPress={() => setShortBreakSetting(Math.min(15, shortBreakSetting + 1))}
                 style={[styles.stepperButton, isRunning && styles.stepperButtonDisabled]}
               >
                 <Text style={styles.stepperButtonText}>+</Text>
@@ -423,7 +335,7 @@ export function FocusScreen() {
             <View style={styles.stepperContainer}>
               <Pressable
                 disabled={isRunning}
-                onPress={() => setLongBreakSetting(prev => Math.max(5, prev - 5))}
+                onPress={() => setLongBreakSetting(Math.max(5, longBreakSetting - 5))}
                 style={[styles.stepperButton, isRunning && styles.stepperButtonDisabled]}
               >
                 <Text style={styles.stepperButtonText}>-</Text>
@@ -431,7 +343,7 @@ export function FocusScreen() {
               <Text style={styles.stepperValueText}>{longBreakSetting}m</Text>
               <Pressable
                 disabled={isRunning}
-                onPress={() => setLongBreakSetting(prev => Math.min(30, prev + 5))}
+                onPress={() => setLongBreakSetting(Math.min(30, longBreakSetting + 5))}
                 style={[styles.stepperButton, isRunning && styles.stepperButtonDisabled]}
               >
                 <Text style={styles.stepperButtonText}>+</Text>

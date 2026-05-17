@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   AIMessage,
   CalendarEvent,
@@ -126,161 +128,169 @@ const initialEvents: CalendarEvent[] = [
   }
 ];
 
-export const usePlannerStore = create<PlannerState>((set, get) => ({
-  tasks: initialTasks,
-  habits: initialHabits,
-  events: initialEvents,
-  insights: [
-    { id: 'i1', title: 'Workload rising', body: 'Two high-priority tasks are still unscheduled.', dismissed: false },
-    { id: 'i2', title: 'Habit drift', body: 'Walking habit dropped below 60% this week.', dismissed: false }
-  ],
-  aiMessages: [
-    { id: 'm1', role: 'assistant', text: 'I can summarize your day, flag overload, and build a focus block.' }
-  ],
-  integrations: [
-    { id: 'gcal', name: 'Google Calendar', connected: true, lastSyncedAt: '10 min ago', scope: 'calendar.readonly' },
-    { id: 'outlook', name: 'Outlook', connected: false, lastSyncedAt: 'Never', scope: 'calendar.events' },
-    { id: 'slack', name: 'Slack', connected: true, lastSyncedAt: '1 hr ago', scope: 'chat:write' },
-    { id: 'github', name: 'GitHub', connected: false, lastSyncedAt: 'Never', scope: 'repo issues' }
-  ],
-  notificationPrefs: {
-    pushEnabled: true,
-    emailEnabled: false,
-    dailyDigest: true,
-    weeklyReview: true
-  },
-  focusHistory: [
-    {
-      id: 'f1',
-      mode: 'POMODORO',
-      taskTitle: 'Prepare weekly review',
-      plannedMinutes: 25,
-      completedAt: 'Today 9:45 AM',
-      reflection: 'Good output with minimal interruption.'
-    }
-  ],
-  addTask: (title, description, projectName) =>
-    set((state) => ({
-      tasks: [
-        {
-          id: `t${state.tasks.length + 1}`,
-          title,
-          description,
-          status: 'INBOX',
-          priority: 70,
-          manualPriority: 'MEDIUM',
-          dueDate: 'Unscheduled',
-          tags: ['captured'],
-          projectName,
-          estimatedMinutes: 30,
-          comments: []
-        },
-        ...state.tasks
-      ]
-    })),
-  selectTask: (id) => get().tasks.find((task) => task.id === id),
-  completeTask: (id) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) => (task.id === id ? { ...task, status: 'DONE' } : task))
-    })),
-  moveTask: (id, status) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) => (task.id === id ? { ...task, status } : task))
-    })),
-  addTaskComment: (id, comment) =>
-    set((state) => ({
-      tasks: state.tasks.map((task) => (task.id === id ? { ...task, comments: [...task.comments, comment] } : task))
-    })),
-  addEvent: (title, startAt, endAt, source = 'INTERNAL') =>
-    set((state) => ({
-      events: [
-        ...state.events,
-        {
-          id: `e${state.events.length + 1}`,
-          title,
-          startAt,
-          endAt,
-          source,
-          description: 'Added from the mobile planner',
-          linkedTaskIds: []
-        }
-      ]
-    })),
-  selectEvent: (id) => get().events.find((event) => event.id === id),
-  addHabit: (title, reminderTime) =>
-    set((state) => ({
-      habits: [
-        ...state.habits,
-        {
-          id: `h${state.habits.length + 1}`,
-          title,
-          streak: 0,
-          completedToday: false,
-          color: '#3E6AE1',
-          frequency: 'DAILY',
-          reminderTime,
-          weeklyCompletions: [0, 0, 0, 0, 0, 0, 0],
-          notes: []
-        }
-      ]
-    })),
-  toggleHabit: (id) =>
-    set((state) => ({
-      habits: state.habits.map((habit) =>
-        habit.id === id
-          ? {
-              ...habit,
-              completedToday: !habit.completedToday,
-              streak: habit.completedToday ? Math.max(0, habit.streak - 1) : habit.streak + 1
-            }
-          : habit
-      )
-    })),
-  selectHabit: (id) => get().habits.find((habit) => habit.id === id),
-  dismissInsight: (id) =>
-    set((state) => ({
-      insights: state.insights.map((insight) => (insight.id === id ? { ...insight, dismissed: true } : insight))
-    })),
-  sendAIMessage: (text) =>
-    set((state) => ({
+export const usePlannerStore = create<PlannerState>()(
+  persist(
+    (set, get) => ({
+      tasks: initialTasks,
+      habits: initialHabits,
+      events: initialEvents,
+      insights: [
+        { id: 'i1', title: 'Workload rising', body: 'Two high-priority tasks are still unscheduled.', dismissed: false },
+        { id: 'i2', title: 'Habit drift', body: 'Walking habit dropped below 60% this week.', dismissed: false }
+      ],
       aiMessages: [
-        ...state.aiMessages,
-        { id: `u${state.aiMessages.length + 1}`, role: 'user', text },
+        { id: 'm1', role: 'assistant', text: 'I can summarize your day, flag overload, and build a focus block.' }
+      ],
+      integrations: [
+        { id: 'gcal', name: 'Google Calendar', connected: true, lastSyncedAt: '10 min ago', scope: 'calendar.readonly' },
+        { id: 'outlook', name: 'Outlook', connected: false, lastSyncedAt: 'Never', scope: 'calendar.events' },
+        { id: 'slack', name: 'Slack', connected: true, lastSyncedAt: '1 hr ago', scope: 'chat:write' },
+        { id: 'github', name: 'GitHub', connected: false, lastSyncedAt: 'Never', scope: 'repo issues' }
+      ],
+      notificationPrefs: {
+        pushEnabled: true,
+        emailEnabled: false,
+        dailyDigest: true,
+        weeklyReview: true
+      },
+      focusHistory: [
         {
-          id: `a${state.aiMessages.length + 2}`,
-          role: 'assistant',
-          text: `Action processed: ${text}. I recommend protecting a 45-minute focus block today.`
+          id: 'f1',
+          mode: 'POMODORO',
+          taskTitle: 'Prepare weekly review',
+          plannedMinutes: 25,
+          completedAt: 'Today 9:45 AM',
+          reflection: 'Good output with minimal interruption.'
         }
-      ]
-    })),
-  quickAIAction: (action) =>
-    get().sendAIMessage(
-      action === "What's my day?"
-        ? 'Summarize my day'
-        : action === 'Am I overloaded?'
-          ? 'Check if I am overloaded'
-          : action === 'Schedule my tasks'
-            ? 'Schedule my open tasks'
-            : 'Summarize my last meeting'
-    ),
-  toggleIntegration: (id) =>
-    set((state) => ({
-      integrations: state.integrations.map((integration) =>
-        integration.id === id
-          ? {
-              ...integration,
-              connected: !integration.connected,
-              lastSyncedAt: integration.connected ? 'Disconnected' : 'Just now'
+      ],
+      addTask: (title, description, projectName) =>
+        set((state) => ({
+          tasks: [
+            {
+              id: `t${state.tasks.length + 1}`,
+              title,
+              description,
+              status: 'INBOX',
+              priority: 70,
+              manualPriority: 'MEDIUM',
+              dueDate: 'Unscheduled',
+              tags: ['captured'],
+              projectName,
+              estimatedMinutes: 30,
+              comments: []
+            },
+            ...state.tasks
+          ]
+        })),
+      selectTask: (id) => get().tasks.find((task) => task.id === id),
+      completeTask: (id) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) => (task.id === id ? { ...task, status: 'DONE' } : task))
+        })),
+      moveTask: (id, status) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) => (task.id === id ? { ...task, status } : task))
+        })),
+      addTaskComment: (id, comment) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) => (task.id === id ? { ...task, comments: [...task.comments, comment] } : task))
+        })),
+      addEvent: (title, startAt, endAt, source = 'INTERNAL') =>
+        set((state) => ({
+          events: [
+            ...state.events,
+            {
+              id: `e${state.events.length + 1}`,
+              title,
+              startAt,
+              endAt,
+              source,
+              description: 'Added from the mobile planner',
+              linkedTaskIds: []
             }
-          : integration
-      )
-    })),
-  setNotificationPref: (key, value) =>
-    set((state) => ({
-      notificationPrefs: { ...state.notificationPrefs, [key]: value }
-    })),
-  addFocusSession: (session) =>
-    set((state) => ({
-      focusHistory: [session, ...state.focusHistory]
-    }))
-}));
+          ]
+        })),
+      selectEvent: (id) => get().events.find((event) => event.id === id),
+      addHabit: (title, reminderTime) =>
+        set((state) => ({
+          habits: [
+            ...state.habits,
+            {
+              id: `h${state.habits.length + 1}`,
+              title,
+              streak: 0,
+              completedToday: false,
+              color: '#3E6AE1',
+              frequency: 'DAILY',
+              reminderTime,
+              weeklyCompletions: [0, 0, 0, 0, 0, 0, 0],
+              notes: []
+            }
+          ]
+        })),
+      toggleHabit: (id) =>
+        set((state) => ({
+          habits: state.habits.map((habit) =>
+            habit.id === id
+              ? {
+                  ...habit,
+                  completedToday: !habit.completedToday,
+                  streak: habit.completedToday ? Math.max(0, habit.streak - 1) : habit.streak + 1
+                }
+              : habit
+          )
+        })),
+      selectHabit: (id) => get().habits.find((habit) => habit.id === id),
+      dismissInsight: (id) =>
+        set((state) => ({
+          insights: state.insights.map((insight) => (insight.id === id ? { ...insight, dismissed: true } : insight))
+        })),
+      sendAIMessage: (text) =>
+        set((state) => ({
+          aiMessages: [
+            ...state.aiMessages,
+            { id: `u${state.aiMessages.length + 1}`, role: 'user', text },
+            {
+              id: `a${state.aiMessages.length + 2}`,
+              role: 'assistant',
+              text: `Action processed: ${text}. I recommend protecting a 45-minute focus block today.`
+            }
+          ]
+        })),
+      quickAIAction: (action) =>
+        get().sendAIMessage(
+          action === "What's my day?"
+            ? 'Summarize my day'
+            : action === 'Am I overloaded?'
+              ? 'Check if I am overloaded'
+              : action === 'Schedule my tasks'
+                ? 'Schedule my open tasks'
+                : 'Summarize my last meeting'
+        ),
+      toggleIntegration: (id) =>
+        set((state) => ({
+          integrations: state.integrations.map((integration) =>
+            integration.id === id
+              ? {
+                  ...integration,
+                  connected: !integration.connected,
+                  lastSyncedAt: integration.connected ? 'Disconnected' : 'Just now'
+                }
+              : integration
+          )
+        })),
+      setNotificationPref: (key, value) =>
+        set((state) => ({
+          notificationPrefs: { ...state.notificationPrefs, [key]: value }
+        })),
+      addFocusSession: (session) =>
+        set((state) => ({
+          focusHistory: [session, ...state.focusHistory]
+        }))
+    }),
+    {
+      name: 'planner-storage',
+      storage: createJSONStorage(() => AsyncStorage)
+    }
+  )
+);

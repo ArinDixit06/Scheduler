@@ -6,14 +6,9 @@ import { MainTabNavigator } from './MainTabNavigator';
 const Stack = createNativeStackNavigator();
 
 export function RootNavigator() {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {isAuthenticated ? (
-        <Stack.Screen name="Main" component={MainTabNavigator} />
-      ) : (
-        <Stack.Screen name="Auth" component={AuthStack} />
-      )}
+      <Stack.Screen name="Main" component={MainTabNavigator} />
     </Stack.Navigator>
   );
 }

@@ -122,6 +122,12 @@ export function MainTabNavigator() {
         options={{
           tabBarIcon: ({ color }) => <Text style={[styles.tabLabel, { color }]}>More</Text>
         }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            // Reset nested stack to MoreHome when tab is clicked
+            navigation.navigate('More', { screen: 'MoreHome' });
+          },
+        })}
       />
     </Tab.Navigator>
   );
