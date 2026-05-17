@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../constants/theme.dart';
+import '../../models/message.dart';
 import '../../providers/copilot_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/calendar_provider.dart';

@@ -58,6 +58,7 @@ class Task {
   List<String> tags;
   List<Subtask> subtasks;
   DateTime createdAt;
+  DateTime? completedAt;
 
   Task({
     required this.id,
@@ -72,6 +73,7 @@ class Task {
     required this.tags,
     required this.subtasks,
     required this.createdAt,
+    this.completedAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -87,6 +89,7 @@ class Task {
         'tags': tags,
         'subtasks': subtasks.map((e) => e.toJson()).toList(),
         'createdAt': createdAt.toIso8601String(),
+        'completedAt': completedAt?.toIso8601String(),
       };
 
   factory Task.fromJson(Map<String, dynamic> json) => Task(
@@ -104,5 +107,6 @@ class Task {
             .map((e) => Subtask.fromJson(e as Map<String, dynamic>))
             .toList(),
         createdAt: DateTime.parse(json['createdAt'] as String? ?? DateTime.now().toIso8601String()),
+        completedAt: json['completedAt'] != null ? DateTime.parse(json['completedAt'] as String) : null,
       );
 }
