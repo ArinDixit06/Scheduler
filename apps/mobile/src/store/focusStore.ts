@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Vibration, LayoutAnimation } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 export type Phase = 'Focus' | 'Short Break' | 'Long Break';
 
@@ -114,6 +115,19 @@ export const useFocusStore = create<FocusState>()(
 
         if (secsLeft <= 0) {
           Vibration.vibrate([0, 500, 200, 500]);
+
+          // Push immediate system notification banner
+          Notifications.scheduleNotificationAsync({
+            content: {
+              title: state.currentPhase === 'Focus' ? '🧠 Focus Block Complete!' : '🧘 Break Period Complete!',
+              body: state.currentPhase === 'Focus'
+                ? `Sensational! You completed "${state.linkedTaskName || 'General Focus Block'}" focus block.`
+                : 'Ready to enter focus flow? Tap to start your next block!',
+              sound: true,
+              priority: Notifications.AndroidNotificationPriority.MAX
+            },
+            trigger: null
+          }).catch((err) => console.warn('System push alert scheduling failed:', err));
           
           if (state.currentPhase === 'Focus') {
             const nextSessionCount = state.completedSessions + 1;

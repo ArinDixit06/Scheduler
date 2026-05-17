@@ -2,6 +2,7 @@
   "expo": {
     "name": "APEX",
     "slug": "apex",
+    "owner": "arindixit2",
     "version": "1.0.0",
     "orientation": "portrait",
     "jsEngine": "hermes",
@@ -21,7 +22,20 @@
       "adaptiveIcon": {
         "backgroundColor": "#ffffff"
       },
-      "package": "com.arin.apex"
+      "package": "com.arin.apex",
+      "permissions": [
+        "NOTIFICATIONS",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-web-browser",
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ac053791-cf13-4274-8ab0-1986194c104c"
+      }
     }
   }
 }

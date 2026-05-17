@@ -1,8 +1,5 @@
 {
   "name": "apex",
   "private": true,
-  "main": "App.js",
-  "workspaces": [
-    "apps/*"
-  ]
+  "main": "App.js"
 }

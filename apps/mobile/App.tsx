@@ -5,13 +5,23 @@ import { NavigationContainer, DarkTheme, DefaultTheme, useNavigationContainerRef
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useAppStore } from './src/store/appStore';
 import { useFocusStore } from './src/store/focusStore';
 import { usePlannerStore } from './src/store/plannerStore';
 import { FloatingTimerPill } from './src/components/common/FloatingTimerPill';
 import { LiveActivityNotification } from './src/components/common/LiveActivityNotification';
+
+// Configure standard foreground system notification banner alerts
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldVibrate: true,
+  } as any),
+});
 
 const queryClient = new QueryClient();
 
@@ -23,6 +33,31 @@ export default function App() {
   const isRunning = useFocusStore((s) => s.isRunning);
   const tickSecond = useFocusStore((s) => s.tickSecond);
   const addFocusSession = usePlannerStore((s) => s.addFocusSession);
+
+  // Register Android system-level channel and request permissions on mount
+  useEffect(() => {
+    async function setupSystemNotifications() {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'default',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#3B82F6',
+        });
+      }
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      if (finalStatus !== 'granted') {
+        console.warn('System push notifications permission not granted!');
+      }
+    }
+    setupSystemNotifications();
+  }, []);
 
   // Global persistent interval countdown
   useEffect(() => {

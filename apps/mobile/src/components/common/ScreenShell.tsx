@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, Platform } from 'react-native';
 import { palette } from '../../constants/theme';
 
 export function ScreenShell({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
@@ -19,6 +19,7 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     padding: 20,
+    paddingTop: Platform.OS === 'ios' ? 60 : 50,
     gap: 20,
     backgroundColor: palette.ash
   },

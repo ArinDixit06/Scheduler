@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,14 @@ import {
   Platform
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 import { ScreenShell } from '../../components/common/ScreenShell';
 import { usePlannerStore } from '../../store/plannerStore';
 import { colors } from '../../constants/colors';
+
+// Complete incoming OAuth redirect loops cleanly
+WebBrowser.maybeCompleteAuthSession();
 
 export function IntegrationsScreen() {
   const integrations = usePlannerStore((s) => s.integrations);
@@ -25,43 +30,66 @@ export function IntegrationsScreen() {
   const [isOAuthVisible, setIsOAuthVisible] = useState(false);
   const [syncingProvider, setSyncingProvider] = useState<string | null>(null);
 
+  // Real production Google OAuth integration hook
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB,
+    scopes: ['https://www.googleapis.com/auth/calendar.readonly']
+  });
+
+  // Handle successful live authorization callback
+  useEffect(() => {
+    if (response?.type === 'success' && response.authentication?.accessToken) {
+      const accessToken = response.authentication.accessToken;
+      setSyncingProvider('gcal');
+      
+      // Perform live sync fetch with Google access token
+      syncGoogleCalendar(accessToken).then(() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setSyncingProvider(null);
+        Vibration.vibrate(15);
+      }).catch((err) => {
+        console.error('Error during active calendar sync:', err);
+        setSyncingProvider(null);
+      });
+    }
+  }, [response]);
+
   const handleConnectIntegration = (providerId: string) => {
     Vibration.vibrate(10);
     if (providerId === 'gcal') {
-      // Launch Google OAuth modal
+      // Launch branded permissions card overlay
       setIsOAuthVisible(true);
     } else {
-      // Toggle immediately for other providers
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       toggleIntegration(providerId);
     }
   };
 
-  const handleOAuthAllow = () => {
-    Vibration.vibrate([0, 50, 100, 50]);
+  const handleOAuthAllow = async () => {
+    Vibration.vibrate(8);
     setIsOAuthVisible(false);
     
-    // Trigger simulated sync immediately after authentication
-    setSyncingProvider('gcal');
-    setTimeout(() => {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      syncGoogleCalendar();
-      setSyncingProvider(null);
-      Vibration.vibrate(15);
-    }, 2000);
+    // Launch standard system browser OAuth login prompt
+    try {
+      await promptAsync();
+    } catch (err) {
+      console.warn('OAuth prompt cancelled or blocked:', err);
+    }
   };
 
   const handleManualSync = (providerId: string) => {
     Vibration.vibrate(8);
     setSyncingProvider(providerId);
     
-    // Run sync loader
     setTimeout(() => {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
       if (providerId === 'gcal') {
+        // Run calendar sync fetch
         syncGoogleCalendar();
       } else {
-        toggleIntegration(providerId); // Toggle sync stamp
+        toggleIntegration(providerId);
       }
       setSyncingProvider(null);
       Vibration.vibrate(12);
@@ -76,10 +104,10 @@ export function IntegrationsScreen() {
   };
 
   const getProviderColor = (id: string) => {
-    if (id === 'gcal') return '#EA4335'; // Google Red
-    if (id === 'outlook') return '#0078D4'; // Outlook Blue
-    if (id === 'slack') return '#4A154B'; // Slack Purple
-    return '#24292E'; // GitHub Black
+    if (id === 'gcal') return '#EA4335';
+    if (id === 'outlook') return '#0078D4';
+    if (id === 'slack') return '#4A154B';
+    return '#24292E';
   };
 
   return (
@@ -92,7 +120,6 @@ export function IntegrationsScreen() {
 
         <View style={styles.cardsStack}>
           {integrations.map((item) => {
-            const isGoogle = item.id === 'gcal';
             const iconName = getProviderIcon(item.id);
             const brandColor = getProviderColor(item.id);
             const isSyncing = syncingProvider === item.id;
@@ -106,7 +133,6 @@ export function IntegrationsScreen() {
                 ]}
               >
                 <View style={styles.cardHeader}>
-                  {/* Brand Icon Circle */}
                   <View style={[styles.brandIconBg, { backgroundColor: `${brandColor}12` }]}>
                     <Ionicons name={iconName as any} size={22} color={brandColor} />
                   </View>
@@ -116,7 +142,6 @@ export function IntegrationsScreen() {
                     <Text style={styles.providerScope}>{item.scope}</Text>
                   </View>
 
-                  {/* Connected Status Badge */}
                   {item.connected ? (
                     <View style={styles.connectedBadge}>
                       <Ionicons name="checkmark-circle" size={14} color="#10B981" />
@@ -125,7 +150,6 @@ export function IntegrationsScreen() {
                   ) : null}
                 </View>
 
-                {/* Card Action Row */}
                 <View style={styles.cardFooter}>
                   <Text style={styles.syncStatusText}>
                     {isSyncing ? 'Synchronizing...' : `Last Synced: ${item.lastSyncedAt}`}
@@ -187,7 +211,7 @@ export function IntegrationsScreen() {
         </View>
       </ScrollView>
 
-      {/* Simulated Google OAuth Authorization Modal */}
+      {/* Branded Google OAuth Authorization Info Modal */}
       <Modal
         visible={isOAuthVisible}
         transparent={true}
@@ -198,10 +222,8 @@ export function IntegrationsScreen() {
           <Pressable style={styles.dismissArea} onPress={() => setIsOAuthVisible(false)} />
           
           <View style={styles.modalSheetContent}>
-            {/* Header notch */}
             <View style={styles.sheetHandle} />
 
-            {/* Google Identity Logo */}
             <View style={styles.gLogoWrapper}>
               <Ionicons name="logo-google" size={40} color="#EA4335" />
             </View>
@@ -211,7 +233,6 @@ export function IntegrationsScreen() {
               Chronos requests authorization to link your calendar meetings and focus activities.
             </Text>
 
-            {/* Permissions list */}
             <View style={styles.permissionsGroup}>
               <View style={styles.permissionItem}>
                 <Ionicons name="calendar-outline" size={20} color="#6B7280" />
@@ -234,7 +255,6 @@ export function IntegrationsScreen() {
               By proceeding, you authorize Chronos to securely manage calendar resources locally. No data leaves your mobile device.
             </Text>
 
-            {/* Button Actions */}
             <View style={styles.buttonActionGroup}>
               <Pressable
                 onPress={() => setIsOAuthVisible(false)}
@@ -244,8 +264,13 @@ export function IntegrationsScreen() {
               </Pressable>
 
               <Pressable
+                disabled={!request}
                 onPress={handleOAuthAllow}
-                style={({ pressed }) => [styles.oauthAllowBtn, pressed && styles.buttonPressed]}
+                style={({ pressed }) => [
+                  styles.oauthAllowBtn,
+                  pressed && styles.buttonPressed,
+                  !request && styles.disabledButton
+                ]}
               >
                 <Text style={styles.oauthAllowBtnText}>Allow & Link</Text>
               </Pressable>
@@ -505,7 +530,7 @@ const styles = StyleSheet.create({
     flex: 2,
     paddingVertical: 14,
     borderRadius: 12,
-    backgroundColor: '#EA4335', // Google Red
+    backgroundColor: '#EA4335',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#EA4335',

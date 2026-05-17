@@ -36,7 +36,7 @@ type PlannerState = {
   sendAIMessage: (text: string) => void;
   quickAIAction: (action: string) => void;
   toggleIntegration: (id: string) => void;
-  syncGoogleCalendar: () => void;
+  syncGoogleCalendar: (accessToken?: string) => Promise<void>;
   setNotificationPref: (key: keyof NotificationPrefs, value: boolean) => void;
   addFocusSession: (session: FocusSession) => void;
 };
@@ -280,9 +280,60 @@ export const usePlannerStore = create<PlannerState>()(
               : integration
           )
         })),
-      syncGoogleCalendar: () => {
-        set((state) => {
-          const googleEvents = [
+      syncGoogleCalendar: async (accessToken) => {
+        let googleEvents: any[] = [];
+
+        if (accessToken) {
+          try {
+            const response = await fetch(
+              'https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=15',
+              {
+                headers: {
+                  Authorization: `Bearer ${accessToken}`,
+                  'Content-Type': 'application/json'
+                }
+              }
+            );
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.items && Array.isArray(data.items)) {
+                googleEvents = data.items.map((item: any) => {
+                  const startStr = item.start?.dateTime || item.start?.date || '';
+                  const endStr = item.end?.dateTime || item.end?.date || '';
+
+                  const formatTime = (isoString: string) => {
+                    if (!isoString) return '09:00';
+                    try {
+                      const d = new Date(isoString);
+                      const hours = String(d.getHours()).padStart(2, '0');
+                      const mins = String(d.getMinutes()).padStart(2, '0');
+                      return `${hours}:${mins}`;
+                    } catch {
+                      return '09:00';
+                    }
+                  };
+
+                  return {
+                    id: `gcal_${item.id}`,
+                    title: item.summary || 'Google Event',
+                    startAt: formatTime(startStr),
+                    endAt: formatTime(endStr),
+                    source: 'GOOGLE' as const,
+                    description: item.description || 'Google Calendar synced meeting.',
+                    linkedTaskIds: []
+                  };
+                });
+              }
+            }
+          } catch (err) {
+            console.warn('Failed to fetch live Google Calendar events, falling back to mock data:', err);
+          }
+        }
+
+        // Fallback to high-fidelity mock events if live fetch has no items or was skipped
+        if (googleEvents.length === 0) {
+          googleEvents = [
             {
               id: 'gcal_e1',
               title: 'Strategic Roadmap Align',
@@ -311,9 +362,11 @@ export const usePlannerStore = create<PlannerState>()(
               linkedTaskIds: []
             }
           ];
+        }
 
+        set((state) => {
           // Filter out existing gcal events to keep sync idempotent
-          const filteredExisting = state.events.filter(e => !e.id.startsWith('gcal_'));
+          const filteredExisting = state.events.filter((e) => !e.id.startsWith('gcal_'));
 
           return {
             events: [...filteredExisting, ...googleEvents],

@@ -16,15 +16,20 @@ import {
 import { usePlannerStore } from '../../store/plannerStore';
 import { colors } from '../../constants/colors';
 import { fetchGroqChatResponse, saveConversationHistory, loadConversationHistory } from '../../api/groq';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type SuggestionData = {
   id: string;
+  type: 'EVENT' | 'TASK';
   title: string;
-  startAt: string;
-  endAt: string;
+  startAt?: string;
+  endAt?: string;
   description: string;
+  projectName?: string;
+  dueDate?: string;
+  estimatedMinutes?: number;
   scheduled?: boolean;
 };
 
@@ -48,6 +53,7 @@ export function AICopilotScreen() {
   const events = usePlannerStore((s) => s.events);
   const focusHistory = usePlannerStore((s) => s.focusHistory);
   const addEventStore = usePlannerStore((s) => s.addEvent);
+  const addTaskStore = usePlannerStore((s) => s.addTask);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -153,41 +159,48 @@ export function AICopilotScreen() {
     };
   };
 
-  // Card suggestion parser (looks for ALL [SUGGESTION:EVENT] ... [/SUGGESTION] blocks)
+  // Card suggestion parser (extracts both [SUGGESTION:EVENT] and [SUGGESTION:TASK] items)
   const parseResponseForCard = (rawText: string): Message => {
-    const suggestionTag = '[SUGGESTION:EVENT]';
-    const closeSuggestionTag = '[/SUGGESTION]';
-
     const suggestions: SuggestionData[] = [];
     let cleanText = rawText;
-    let startIndex = cleanText.indexOf(suggestionTag);
-    let idCounter = 1;
 
-    while (startIndex !== -1) {
-      const endIndex = cleanText.indexOf(closeSuggestionTag, startIndex);
-      if (endIndex === -1) break;
+    const extractSuggestionsForTag = (tagType: 'EVENT' | 'TASK', openTag: string, closeTag: string) => {
+      let startIndex = cleanText.indexOf(openTag);
+      let idCounter = 1;
 
-      const tagBlock = cleanText.substring(startIndex, endIndex + closeSuggestionTag.length);
-      const jsonContent = cleanText.substring(startIndex + suggestionTag.length, endIndex).trim();
+      while (startIndex !== -1) {
+        const endIndex = cleanText.indexOf(closeTag, startIndex);
+        if (endIndex === -1) break;
 
-      try {
-        const data = JSON.parse(jsonContent);
-        suggestions.push({
-          id: `sug_${Date.now()}_${idCounter++}`,
-          title: data.title || 'AI Focus Block',
-          startAt: data.startAt || '12:00',
-          endAt: data.endAt || '13:00',
-          description: data.description || 'Recommended focus slot',
-          scheduled: false
-        });
-      } catch (err) {
-        console.error('Failed to parse suggestion JSON:', err);
+        const tagBlock = cleanText.substring(startIndex, endIndex + closeTag.length);
+        const jsonContent = cleanText.substring(startIndex + openTag.length, endIndex).trim();
+
+        try {
+          const data = JSON.parse(jsonContent);
+          suggestions.push({
+            id: `sug_${tagType.toLowerCase()}_${Date.now()}_${idCounter++}`,
+            type: tagType,
+            title: data.title || (tagType === 'EVENT' ? 'AI Focus Block' : 'AI Task'),
+            startAt: data.startAt,
+            endAt: data.endAt,
+            description: data.description || '',
+            projectName: data.projectName,
+            dueDate: data.dueDate,
+            estimatedMinutes: data.estimatedMinutes,
+            scheduled: false
+          });
+        } catch (err) {
+          console.error(`Failed to parse ${tagType} suggestion JSON:`, err);
+        }
+
+        // Strip tag block from standard rendered text
+        cleanText = cleanText.replace(tagBlock, '');
+        startIndex = cleanText.indexOf(openTag);
       }
+    };
 
-      // Remove the tag block from the display text
-      cleanText = cleanText.replace(tagBlock, '');
-      startIndex = cleanText.indexOf(suggestionTag);
-    }
+    extractSuggestionsForTag('EVENT', '[SUGGESTION:EVENT]', '[/SUGGESTION]');
+    extractSuggestionsForTag('TASK', '[SUGGESTION:TASK]', '[/SUGGESTION]');
 
     return {
       id: `msg_${Date.now()}`,
@@ -234,12 +247,17 @@ export function AICopilotScreen() {
     handleSendMessage(phrase);
   };
 
-  // Accept/Add Event to calendar
-  const handleAcceptSuggestion = (msgId: string, sugId: string, eventData: any) => {
+  // Accept/Add Event to calendar or Task to checklist
+  const handleAcceptSuggestion = (msgId: string, sugId: string, sug: SuggestionData) => {
     Vibration.vibrate([0, 15, 30]); // success chime vibration
-    addEventStore(eventData.title, eventData.startAt, eventData.endAt, 'INTERNAL');
 
-    // Update message card state to "Scheduled" for this specific suggestion
+    if (sug.type === 'TASK') {
+      addTaskStore(sug.title, sug.description, sug.projectName);
+    } else {
+      addEventStore(sug.title, sug.startAt || '09:00', sug.endAt || '10:00', 'INTERNAL');
+    }
+
+    // Update message card state to "Scheduled/Accepted" for this specific suggestion
     setMessages(prev =>
       prev.map(m => {
         if (m.id !== msgId) return m;
@@ -249,6 +267,32 @@ export function AICopilotScreen() {
             if (s.id !== sugId) return s;
             return { ...s, scheduled: true };
           })
+        };
+      })
+    );
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+  };
+
+  // Bulk-accept all pending suggestions inside a message
+  const handleAcceptAllSuggestions = (msgId: string, suggestionsList: SuggestionData[]) => {
+    Vibration.vibrate([0, 15, 30, 15, 30]); // long success double-chime
+
+    suggestionsList.forEach(sug => {
+      if (sug.scheduled) return; // Skip already accepted ones
+      if (sug.type === 'TASK') {
+        addTaskStore(sug.title, sug.description, sug.projectName);
+      } else {
+        addEventStore(sug.title, sug.startAt || '09:00', sug.endAt || '10:00', 'INTERNAL');
+      }
+    });
+
+    // Mark all suggestions in this message as scheduled
+    setMessages(prev =>
+      prev.map(m => {
+        if (m.id !== msgId) return m;
+        return {
+          ...m,
+          suggestions: m.suggestions?.map(s => ({ ...s, scheduled: true }))
         };
       })
     );
@@ -352,40 +396,90 @@ export function AICopilotScreen() {
                   </Text>
                 </Pressable>
 
-                {/* Structured Event recommendation Card replies inside bubble wrapper */}
-                {msg.suggestions && msg.suggestions.map((sug) => (
-                  <View key={sug.id} style={styles.cardReplyContainer}>
-                    <View style={styles.cardIndicatorLine} />
-                    <View style={styles.cardReplyBody}>
-                      <Text style={styles.cardReplyTitle}>{sug.title}</Text>
+                {/* Bulk Action Header for multiple suggestions inside a single message */}
+                {msg.suggestions && msg.suggestions.length > 1 && msg.suggestions.some(s => !s.scheduled) ? (
+                  <Pressable
+                    onPress={() => handleAcceptAllSuggestions(msg.id, msg.suggestions || [])}
+                    style={({ pressed }) => [
+                      styles.bulkAcceptHeader,
+                      pressed && styles.buttonPressed
+                    ]}
+                  >
+                    <Ionicons name="sparkles-outline" size={14} color="#FFFFFF" style={{ marginRight: 6 }} />
+                    <Text style={styles.bulkAcceptHeaderText}>Accept All Proposals ({msg.suggestions?.filter(s => !s.scheduled).length} items)</Text>
+                  </Pressable>
+                ) : null}
+
+                {/* Structured Event/Task recommendation Card replies inside bubble wrapper */}
+                {msg.suggestions && msg.suggestions.map((sug) => {
+                  const isTask = sug.type === 'TASK';
+                  const isAccepted = sug.scheduled;
+
+                  return (
+                    <View key={sug.id} style={[styles.cardReplyContainer, isTask && styles.cardReplyContainerTask]}>
+                      <View style={[styles.cardIndicatorLine, { backgroundColor: isTask ? '#10B981' : '#3B82F6' }]} />
                       
-                      <View style={styles.cardTimeRow}>
-                        <Text style={styles.cardTimeText}>⏱️ {sug.startAt} – {sug.endAt}</Text>
+                      <View style={styles.cardReplyBody}>
+                        {/* Title & Tag */}
+                        <View style={styles.cardHeaderRow}>
+                          <Text style={styles.cardReplyTitle} numberOfLines={1}>{sug.title}</Text>
+                          {isTask && sug.projectName ? (
+                            <View style={styles.projectTagPill}>
+                              <Text style={styles.projectTagPillText}>{sug.projectName}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                        
+                        {/* Metadata row */}
+                        <View style={styles.cardTimeRow}>
+                          {isTask ? (
+                            <>
+                              {sug.estimatedMinutes ? (
+                                <Text style={styles.cardTimeText}>⏱️ {sug.estimatedMinutes} mins</Text>
+                              ) : null}
+                              {sug.dueDate ? (
+                                <Text style={[styles.cardTimeText, { marginLeft: sug.estimatedMinutes ? 12 : 0 }]}>
+                                  📅 {sug.dueDate}
+                                </Text>
+                              ) : null}
+                            </>
+                          ) : (
+                            <Text style={styles.cardTimeText}>⏱️ {sug.startAt} – {sug.endAt}</Text>
+                          )}
+                        </View>
+
+                        {sug.description ? (
+                          <Text style={styles.cardDescText}>{sug.description}</Text>
+                        ) : null}
+
+                        {/* Accept/Add button */}
+                        <Pressable
+                          disabled={isAccepted}
+                          onPress={() => handleAcceptSuggestion(msg.id, sug.id, sug)}
+                          style={[
+                            styles.cardAcceptButton,
+                            { backgroundColor: isTask ? '#EFFDF6' : '#EFF6FF', borderColor: isTask ? '#A7F3D0' : '#BFDBFE' },
+                            isAccepted && styles.cardAcceptButtonDisabled
+                          ]}
+                        >
+                          <Ionicons 
+                            name={isAccepted ? 'checkmark-circle' : (isTask ? 'add-circle-outline' : 'calendar-outline')} 
+                            size={14} 
+                            color={isAccepted ? '#9CA3AF' : (isTask ? '#059669' : '#2563EB')} 
+                            style={{ marginRight: 6 }} 
+                          />
+                          <Text style={[
+                            styles.cardAcceptButtonText,
+                            { color: isTask ? '#059669' : '#2563EB' },
+                            isAccepted && styles.cardAcceptButtonTextDisabled
+                          ]}>
+                            {isAccepted ? (isTask ? 'Created ✓' : 'Scheduled ✓') : (isTask ? 'Create Task / Accept' : 'Add to Calendar / Accept')}
+                          </Text>
+                        </Pressable>
                       </View>
-
-                      {sug.description ? (
-                        <Text style={styles.cardDescText}>{sug.description}</Text>
-                      ) : null}
-
-                      {/* Accept/Add button */}
-                      <Pressable
-                        disabled={sug.scheduled}
-                        onPress={() => handleAcceptSuggestion(msg.id, sug.id, sug)}
-                        style={[
-                          styles.cardAcceptButton,
-                          sug.scheduled && styles.cardAcceptButtonDisabled
-                        ]}
-                      >
-                        <Text style={[
-                          styles.cardAcceptButtonText,
-                          sug.scheduled && styles.cardAcceptButtonTextDisabled
-                        ]}>
-                          {sug.scheduled ? 'Scheduled ✓' : 'Add to Calendar / Accept'}
-                        </Text>
-                      </Pressable>
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </View>
           );
@@ -745,27 +839,51 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 1
   },
+  cardReplyContainerTask: {
+    borderColor: '#E6E6FA'
+  },
   cardIndicatorLine: {
-    width: 4,
-    backgroundColor: colors.success
+    width: 4
   },
   cardReplyBody: {
     flex: 1,
     padding: 14,
     gap: 6
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    gap: 8
+  },
   cardReplyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
+    flex: 1,
+    fontSize: 13.5,
+    fontWeight: '800',
     color: colors.textPrimary
+  },
+  projectTagPill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 0.5,
+    borderColor: '#DBEAFE'
+  },
+  projectTagPillText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#3B82F6',
+    textTransform: 'uppercase'
   },
   cardTimeRow: {
     flexDirection: 'row',
     alignItems: 'center'
   },
   cardTimeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: colors.textSubdued
   },
   cardDescText: {
@@ -774,24 +892,48 @@ const styles = StyleSheet.create({
     lineHeight: 15
   },
   cardAcceptButton: {
-    backgroundColor: colors.success,
     borderRadius: 8,
+    borderWidth: 1.2,
     paddingVertical: 8,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 4
   },
   cardAcceptButtonDisabled: {
     backgroundColor: colors.surfaceSecondary,
-    borderWidth: 1,
     borderColor: colors.border
   },
   cardAcceptButtonText: {
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '600'
+    fontSize: 11.5,
+    fontWeight: '800'
   },
   cardAcceptButtonTextDisabled: {
     color: colors.textLight
+  },
+  bulkAcceptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3B82F6',
+    paddingVertical: 10,
+    borderRadius: 12,
+    shadowColor: '#3B82F6',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 2,
+    marginTop: 4,
+    marginBottom: 4
+  },
+  bulkAcceptHeaderText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.2
+  },
+  buttonPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }]
   },
 
   // Suggestion action chips
