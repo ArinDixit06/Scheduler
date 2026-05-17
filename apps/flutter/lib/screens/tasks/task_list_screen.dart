@@ -4,6 +4,7 @@ import '../../constants/theme.dart';
 import '../../models/task.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/screen_shell.dart';
+import 'task_detail_screen.dart';
 
 class TaskListScreen extends StatefulWidget {
   const TaskListScreen({Key? key}) : super(key: key);
@@ -320,7 +321,20 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           task.priority = nextPriority;
                           taskProvider.updateTask(task);
                         },
-                        child: Text('CYCLE PRIORITY'),
+                        child: const Text('CYCLE PRIORITY', style: TextStyle(fontSize: 11)),
+                      ),
+
+                      // Full Details screen
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => TaskDetailScreen(taskId: task.id),
+                            ),
+                          );
+                        },
+                        child: const Text('DETAILS →', style: TextStyle(fontSize: 11, color: AppTheme.electricBlue, fontWeight: FontWeight.bold)),
                       ),
 
                       // Delete task
@@ -330,7 +344,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                           setState(() => _expandedTask = null);
                         },
                         style: TextButton.styleFrom(foregroundColor: AppTheme.priorityHigh),
-                        child: const Text('DELETE'),
+                        child: const Text('DELETE', style: TextStyle(fontSize: 11)),
                       ),
                     ],
                   ),

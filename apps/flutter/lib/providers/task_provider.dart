@@ -171,4 +171,31 @@ class TaskProvider extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void deleteSubtask(String taskId, String subtaskId) {
+    final taskIndex = _tasks.indexWhere((t) => t.id == taskId);
+    if (taskIndex != -1) {
+      final task = _tasks[taskIndex];
+      task.subtasks.removeWhere((s) => s.id == subtaskId);
+      _tasks[taskIndex] = task;
+      _saveTasks();
+      notifyListeners();
+    }
+  }
+
+  void updateTaskStatus(String taskId, TaskStatus status) {
+    final index = _tasks.indexWhere((t) => t.id == taskId);
+    if (index != -1) {
+      final task = _tasks[index];
+      task.status = status;
+      if (status == TaskStatus.done) {
+        task.completedAt = DateTime.now();
+      } else {
+        task.completedAt = null;
+      }
+      _tasks[index] = task;
+      _saveTasks();
+      notifyListeners();
+    }
+  }
 }

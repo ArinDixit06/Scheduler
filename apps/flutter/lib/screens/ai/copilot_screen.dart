@@ -5,6 +5,8 @@ import '../../models/message.dart';
 import '../../providers/copilot_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/calendar_provider.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/focus_provider.dart';
 import '../../widgets/screen_shell.dart';
 
 class CopilotScreen extends StatefulWidget {
@@ -31,7 +33,16 @@ class _CopilotScreenState extends State<CopilotScreen> {
 
     final taskProvider = Provider.of<TaskProvider>(context, listen: false);
     final calendarProvider = Provider.of<CalendarProvider>(context, listen: false);
-    Provider.of<CopilotProvider>(context, listen: false).sendMessage(query, taskProvider, calendarProvider);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final focusProvider = Provider.of<FocusProvider>(context, listen: false);
+
+    Provider.of<CopilotProvider>(context, listen: false).sendMessage(
+      query,
+      taskProvider,
+      calendarProvider,
+      authProvider,
+      focusProvider,
+    );
 
     _inputController.clear();
     _scrollToBottom();

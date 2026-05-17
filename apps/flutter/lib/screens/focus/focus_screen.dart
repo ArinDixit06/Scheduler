@@ -6,6 +6,7 @@ import '../../models/task.dart';
 import '../../providers/focus_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../widgets/screen_shell.dart';
+import 'session_active_screen.dart';
 
 class FocusScreen extends StatefulWidget {
   const FocusScreen({Key? key}) : super(key: key);
@@ -81,7 +82,11 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
                           trailing: const Icon(Icons.arrow_forward_ios, size: 14),
                           onTap: () {
                             focusProvider.startSession(taskId: task.id);
-                            Navigator.pop(context);
+                            Navigator.pop(context); // Pop bottom sheet
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const SessionActiveScreen()),
+                            );
                           },
                         );
                       },
@@ -99,6 +104,18 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
   Widget build(BuildContext context) {
     final focus = Provider.of<FocusProvider>(context);
     final taskProvider = Provider.of<TaskProvider>(context);
+
+    // If session is already running, auto-push active visual halo
+    if (focus.isRunning) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ModalRoute.of(context)?.isCurrent ?? false) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SessionActiveScreen()),
+          );
+        }
+      });
+    }
 
     // Start/Stop pulsing animation based on timer state
     if (focus.isRunning && !focus.isPaused) {
@@ -239,7 +256,13 @@ class _FocusScreenState extends State<FocusScreen> with SingleTickerProviderStat
           // Standalone focus start
           Expanded(
             child: ElevatedButton(
-              onPressed: () => focus.startSession(),
+              onPressed: () {
+                focus.startSession();
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SessionActiveScreen()),
+                );
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.carbonDark,
                 foregroundColor: AppTheme.pureWhite,

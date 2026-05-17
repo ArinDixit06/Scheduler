@@ -139,4 +139,38 @@ class HabitProvider extends ChangeNotifier {
     _saveHabits();
     notifyListeners();
   }
+
+  bool isCompletedToday(String habitId) {
+    final index = _habits.indexWhere((h) => h.id == habitId);
+    if (index == -1) return false;
+    final habit = _habits[index];
+    final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final currentLog = habit.entries[todayKey] ?? 0;
+    return currentLog >= habit.targetCount;
+  }
+
+  void toggleHabitCompletion(String habitId) {
+    final index = _habits.indexWhere((h) => h.id == habitId);
+    if (index != -1) {
+      final habit = _habits[index];
+      final todayKey = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final currentLog = habit.entries[todayKey] ?? 0;
+
+      if (currentLog >= habit.targetCount) {
+        // Completed today -> Toggle off
+        habit.entries[todayKey] = 0;
+        habit.streak = habit.streak > 0 ? habit.streak - 1 : 0;
+      } else {
+        // Not completed today -> Complete
+        habit.entries[todayKey] = habit.targetCount;
+        habit.streak += 1;
+        if (habit.streak > habit.longestStreak) {
+          habit.longestStreak = habit.streak;
+        }
+      }
+      _habits[index] = habit;
+      _saveHabits();
+      notifyListeners();
+    }
+  }
 }

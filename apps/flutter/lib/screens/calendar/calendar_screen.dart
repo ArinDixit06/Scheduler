@@ -5,6 +5,7 @@ import '../../constants/theme.dart';
 import '../../models/event.dart';
 import '../../providers/calendar_provider.dart';
 import '../../widgets/screen_shell.dart';
+import 'event_detail_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
   const CalendarScreen({Key? key}) : super(key: key);
@@ -161,7 +162,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final endStr = DateFormat('h:mm a').format(event.endAt);
 
     return GestureDetector(
-      onTap: () => _showEventDetailsBottomSheet(event),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => EventDetailScreen(event: event)),
+        );
+      },
       child: Container(
         margin: const EdgeInsets.only(bottom: AppTheme.space4),
         decoration: BoxDecoration(
