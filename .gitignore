@@ -7,7 +7,7 @@ apps/mobile/node_modules/
 apps/mobile/.expo/
 dist/
 web-build/
-
+.env
 # logs
 *.log
 npm-debug.log*

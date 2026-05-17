@@ -66,7 +66,7 @@ function MoreStack() {
   );
 }
 
-function CreateDockButton({ onPress }: { onPress?: () => void }) {
+function CreateDockButton({ onPress }: { onPress?: (e: any) => void }) {
   return (
     <Pressable onPress={onPress} style={styles.createDockWrap}>
       <View style={styles.createDockButton}>
