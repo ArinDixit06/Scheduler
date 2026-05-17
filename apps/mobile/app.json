@@ -12,6 +12,16 @@
       "ios",
       "android",
       "web"
-    ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.arin.apex"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.arin.apex"
+    }
   }
 }
