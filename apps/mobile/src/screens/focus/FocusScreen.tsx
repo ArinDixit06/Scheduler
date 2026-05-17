@@ -158,50 +158,66 @@ export function FocusScreen() {
   }, [allEvents, allHabits, searchQuery]);
 
   return (
-    <View style={styles.container}>
-      {/* Active breathing halo wrappers */}
-      <View style={styles.centerFocusZone}>
-        {/* Looping ambient rings behind the main circle */}
-        <Animated.View
-          style={[
-            styles.ambientRing,
-            styles.ambientRing1,
-            {
-              transform: [{ scale: haloScale1 }],
-              opacity: haloOpacity1
-            }
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.ambientRing,
-            styles.ambientRing2,
-            {
-              transform: [{ scale: haloScale2 }],
-              opacity: haloOpacity2
-            }
-          ]}
-        />
-
-        {/* 1. Large Circular Timer Display */}
-        <View
-          style={[
-            styles.timerCircle,
-            {
-              borderColor: isRunning ? colors.primary : colors.border
-            }
-          ]}
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* 1. Project Selector Dropdown Pill at the top */}
+      <View style={styles.topSelectorContainer}>
+        <Pressable
+          onPress={() => setIsTaskPickerVisible(true)}
+          style={styles.projectDropdownPill}
+          android_ripple={{ color: colors.border }}
         >
-          {/* Circular border progress overlay */}
-          <View style={styles.timerInnerContainer}>
-            <Text style={styles.timeLabel}>{formatTime(secondsLeft)}</Text>
+          <Text style={styles.projectDropdownEmoji}>📂</Text>
+          <Text style={styles.projectDropdownLabel} numberOfLines={1}>
+            {linkedTaskName || 'Select Project'}
+          </Text>
+          <Text style={styles.projectDropdownArrow}>▼</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.centerFocusZone}>
+        {/* Centered Timer and Ambient Rings wrapper */}
+        <View style={styles.timerWrapper}>
+          {/* Looping ambient rings behind the main circle */}
+          <Animated.View
+            style={[
+              styles.ambientRing,
+              styles.ambientRing1,
+              {
+                transform: [{ scale: haloScale1 }],
+                opacity: haloOpacity1
+              }
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.ambientRing,
+              styles.ambientRing2,
+              {
+                transform: [{ scale: haloScale2 }],
+                opacity: haloOpacity2
+              }
+            ]}
+          />
+
+          {/* 2. Large Circular Timer Display */}
+          <View
+            style={[
+              styles.timerCircle,
+              {
+                borderColor: isRunning ? colors.primary : colors.border
+              }
+            ]}
+          >
+            <View style={styles.timerInnerContainer}>
+              <Text style={styles.timeLabel}>{formatTime(secondsLeft)}</Text>
+            </View>
           </View>
         </View>
 
-        {/* 2. Session Phase Label */}
+        {/* 3. Session Phase Label */}
         <Text style={styles.sessionPhaseText}>{currentPhase.toUpperCase()}</Text>
 
-        {/* 3. Session dots row (Pomodoro cycle tracker) */}
+        {/* 4. Session dots row (Pomodoro cycle tracker) */}
         <View style={styles.dotsRow}>
           {Array.from({ length: 4 }).map((_, idx) => {
             const isCompleted = idx < completedSessions % 4;
@@ -221,10 +237,13 @@ export function FocusScreen() {
           })}
         </View>
 
-        {/* 4. Center Pill Control Buttons */}
-        <View style={styles.controlsRow}>
-          <Pressable onPress={handleSkipPhase} style={styles.controlPill}>
-            <Text style={styles.controlPillText}>Skip</Text>
+        {/* 5. Flanked Play/Pause & Reset/Skip Controls */}
+        <View style={styles.premiumControlsRow}>
+          <Pressable
+            onPress={handleResetTimer}
+            style={({ pressed }) => [styles.flankingControlBtn, pressed && styles.controlBtnPressed]}
+          >
+            <Text style={styles.flankingControlEmoji}>🔄</Text>
           </Pressable>
 
           <Pressable
@@ -236,20 +255,52 @@ export function FocusScreen() {
                 startTimer();
               }
             }}
-            style={[styles.controlPill, styles.controlPillPrimary]}
+            style={({ pressed }) => [
+              styles.centralPlayPauseBtn,
+              isRunning && styles.centralPlayPauseBtnActive,
+              pressed && styles.controlBtnPressed
+            ]}
           >
-            <Text style={[styles.controlPillText, styles.controlPillTextPrimary]}>
-              {isRunning ? 'Pause' : 'Start'}
-            </Text>
+            <Text style={styles.centralPlayPauseEmoji}>{isRunning ? '⏸️' : '▶️'}</Text>
           </Pressable>
 
-          <Pressable onPress={handleResetTimer} style={styles.controlPill}>
-            <Text style={styles.controlPillText}>Reset</Text>
+          <Pressable
+            onPress={handleSkipPhase}
+            style={({ pressed }) => [styles.flankingControlBtn, pressed && styles.controlBtnPressed]}
+          >
+            <Text style={styles.flankingControlEmoji}>⏭️</Text>
           </Pressable>
+        </View>
+
+        {/* 6. Duration Presets Segment Control */}
+        <View style={styles.segmentPresetsRow}>
+          {[15, 25, 45].map((preset) => {
+            const isSelected = focusSetting === preset;
+            return (
+              <Pressable
+                key={preset}
+                disabled={isRunning}
+                onPress={() => {
+                  Vibration.vibrate(8);
+                  setFocusSetting(preset);
+                  resetTimer();
+                }}
+                style={[
+                  styles.presetSegmentCap,
+                  isSelected && styles.presetSegmentCapActive,
+                  isRunning && styles.presetSegmentCapDisabled
+                ]}
+              >
+                <Text style={[styles.presetSegmentText, isSelected && styles.presetSegmentTextActive]}>
+                  {preset}m
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
-      {/* 5. Bottom Panel Details & Stepper Settings */}
+      {/* 7. Bottom Panel Details & Stepper Settings */}
       <View style={styles.bottomPanel}>
         <View style={styles.panelHandle} />
 
@@ -399,20 +450,66 @@ export function FocusScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background
+    backgroundColor: '#F5F6F8'
+  },
+  scrollContent: {
+    paddingBottom: 40
+  },
+  topSelectorContainer: {
+    alignItems: 'center',
+    marginTop: Platform.OS === 'ios' ? 56 : 20,
+    zIndex: 10
+  },
+  projectDropdownPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2
+  },
+  projectDropdownEmoji: {
+    fontSize: 13,
+    marginRight: 6
+  },
+  projectDropdownLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textPrimary,
+    maxWidth: 160
+  },
+  projectDropdownArrow: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.textLight,
+    marginLeft: 6
   },
   centerFocusZone: {
-    flex: 1.2,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative'
+    position: 'relative',
+    marginTop: 10
+  },
+  timerWrapper: {
+    position: 'relative',
+    width: 270,
+    height: 270,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 10
   },
   ambientRing: {
     position: 'absolute',
@@ -422,11 +519,13 @@ const styles = StyleSheet.create({
   },
   ambientRing1: {
     width: 250,
-    height: 250
+    height: 250,
+    borderRadius: 125
   },
   ambientRing2: {
     width: 270,
-    height: 270
+    height: 270,
+    borderRadius: 135
   },
   timerCircle: {
     width: 210,
@@ -439,7 +538,8 @@ const styles = StyleSheet.create({
     shadowColor: colors.shadow,
     shadowOpacity: 0.1,
     shadowRadius: 18,
-    elevation: 3
+    elevation: 3,
+    zIndex: 2
   },
   timerInnerContainer: {
     alignItems: 'center',
@@ -457,14 +557,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textSubdued,
     letterSpacing: 3,
-    marginTop: 24,
+    marginTop: 20,
     textTransform: 'uppercase'
   },
   dotsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 14,
-    marginBottom: 24
+    marginTop: 12,
+    marginBottom: 20
   },
   sessionDot: {
     width: 10,
@@ -480,36 +580,90 @@ const styles = StyleSheet.create({
     borderColor: colors.primaryLight,
     borderWidth: 2
   },
-  controlsRow: {
+  premiumControlsRow: {
     flexDirection: 'row',
-    gap: 12,
-    alignItems: 'center'
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+    marginTop: 10
   },
-  controlPill: {
-    paddingHorizontal: 22,
-    paddingVertical: 10,
+  flankingControlBtn: {
+    width: 48,
+    height: 48,
     borderRadius: 24,
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowColor: colors.shadow,
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 1
+  },
+  flankingControlEmoji: {
+    fontSize: 18
+  },
+  centralPlayPauseBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#3B82F6',
+    shadowOpacity: 0.28,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5
+  },
+  centralPlayPauseBtnActive: {
+    backgroundColor: '#EF4444',
+    shadowColor: '#EF4444'
+  },
+  centralPlayPauseEmoji: {
+    fontSize: 26,
+    color: '#FFFFFF'
+  },
+  controlBtnPressed: {
+    transform: [{ scale: 0.94 }],
+    opacity: 0.85
+  },
+  segmentPresetsRow: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(229,231,235,0.4)',
+    borderRadius: 14,
+    padding: 4,
+    width: SCREEN_WIDTH - 80,
+    justifyContent: 'space-between',
+    marginTop: 28,
+    borderWidth: 1,
+    borderColor: colors.border
+  },
+  presetSegmentCap: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10
+  },
+  presetSegmentCapActive: {
+    backgroundColor: colors.surface,
+    shadowColor: colors.shadow,
+    shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 1
   },
-  controlPillPrimary: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-    paddingHorizontal: 28,
-    paddingVertical: 12
+  presetSegmentCapDisabled: {
+    opacity: 0.65
   },
-  controlPillText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.textSubdued
+  presetSegmentText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: colors.textLight
   },
-  controlPillTextPrimary: {
-    color: colors.white
+  presetSegmentTextActive: {
+    color: '#3B82F6'
   },
 
   // Bottom panel styles

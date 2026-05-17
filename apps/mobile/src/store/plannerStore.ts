@@ -36,6 +36,7 @@ type PlannerState = {
   sendAIMessage: (text: string) => void;
   quickAIAction: (action: string) => void;
   toggleIntegration: (id: string) => void;
+  syncGoogleCalendar: () => void;
   setNotificationPref: (key: keyof NotificationPrefs, value: boolean) => void;
   addFocusSession: (session: FocusSession) => void;
 };
@@ -279,6 +280,55 @@ export const usePlannerStore = create<PlannerState>()(
               : integration
           )
         })),
+      syncGoogleCalendar: () => {
+        set((state) => {
+          const googleEvents = [
+            {
+              id: 'gcal_e1',
+              title: 'Strategic Roadmap Align',
+              startAt: '13:00',
+              endAt: '14:00',
+              source: 'GOOGLE' as const,
+              description: 'Google Workspace synced Strategic Roadmap review.',
+              linkedTaskIds: []
+            },
+            {
+              id: 'gcal_e2',
+              title: 'Apex Architecture Sync',
+              startAt: '15:30',
+              endAt: '16:00',
+              source: 'GOOGLE' as const,
+              description: 'Google Workspace synced engineering alignment meeting.',
+              linkedTaskIds: []
+            },
+            {
+              id: 'gcal_e3',
+              title: 'Weekly AI Copilot Standup',
+              startAt: '17:00',
+              endAt: '17:30',
+              source: 'GOOGLE' as const,
+              description: 'Google Workspace synced AI Copilot project standup.',
+              linkedTaskIds: []
+            }
+          ];
+
+          // Filter out existing gcal events to keep sync idempotent
+          const filteredExisting = state.events.filter(e => !e.id.startsWith('gcal_'));
+
+          return {
+            events: [...filteredExisting, ...googleEvents],
+            integrations: state.integrations.map((integration) =>
+              integration.id === 'gcal'
+                ? {
+                    ...integration,
+                    connected: true,
+                    lastSyncedAt: 'Just now'
+                  }
+                : integration
+            )
+          };
+        });
+      },
       setNotificationPref: (key, value) =>
         set((state) => ({
           notificationPrefs: { ...state.notificationPrefs, [key]: value }

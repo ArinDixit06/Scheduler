@@ -11,15 +11,6 @@ type FloatingTimerPillProps = {
 export function FloatingTimerPill({ currentScreen }: FloatingTimerPillProps) {
   const { secondsLeft, isRunning, currentPhase } = useFocusStore();
 
-  // If timer is not running, or we are on the active Focus screen, don't show the pill
-  if (!isRunning || currentScreen === 'Focus') {
-    return null;
-  }
-
-  const mins = Math.floor(secondsLeft / 60);
-  const secs = secondsLeft % 60;
-  const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-
   // Draggable animation values (Starts bottom-right above tab bar)
   const pan = useRef(new Animated.ValueXY({ x: WINDOW_WIDTH - 95, y: WINDOW_HEIGHT - 170 })).current;
 
@@ -60,6 +51,16 @@ export function FloatingTimerPill({ currentScreen }: FloatingTimerPillProps) {
       }
     })
   ).current;
+
+  // If timer is not running, or we are on the active Focus screen, don't show the pill
+  // This is placed below the hook declarations to conform to the Rules of Hooks.
+  if (!isRunning || currentScreen === 'Focus') {
+    return null;
+  }
+
+  const mins = Math.floor(secondsLeft / 60);
+  const secs = secondsLeft % 60;
+  const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
   return (
     <Animated.View

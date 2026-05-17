@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { TodayScreen } from '../screens/today/TodayScreen';
 import { TaskListScreen } from '../screens/tasks/TaskListScreen';
 import { TaskDetailScreen } from '../screens/tasks/TaskDetailScreen';
@@ -25,10 +26,44 @@ import { palette } from '../constants/theme';
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
-function HomeStack() {
+const stackOptions = {
+  headerShadowVisible: false,
+  headerTitleStyle: {
+    color: palette.navy,
+    fontWeight: '700' as const
+  },
+  headerStyle: {
+    backgroundColor: palette.ash
+  },
+  contentStyle: {
+    backgroundColor: palette.ash
+  }
+};
+
+function TodayStack() {
   return (
     <Stack.Navigator screenOptions={stackOptions}>
-      <Stack.Screen name="HomeDashboard" component={TodayScreen} options={{ title: 'Home' }} />
+      <Stack.Screen name="TodayHome" component={TodayScreen} options={{ headerShown: false }} />
+    </Stack.Navigator>
+  );
+}
+
+function TasksStack() {
+  return (
+    <Stack.Navigator screenOptions={stackOptions}>
+      <Stack.Screen name="TaskList" component={TaskListScreen} options={{ title: 'Tasks' }} />
+      <Stack.Screen name="TaskDetail" component={TaskDetailScreen} options={{ title: 'Task Detail' }} />
+      <Stack.Screen name="NewTask" component={NewTaskScreen} options={{ title: 'New Task' }} />
+      <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} options={{ title: 'Project Detail' }} />
+    </Stack.Navigator>
+  );
+}
+
+function CalendarStack() {
+  return (
+    <Stack.Navigator screenOptions={stackOptions}>
+      <Stack.Screen name="CalendarHome" component={CalendarScreen} options={{ title: 'Calendar' }} />
+      <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Detail' }} />
     </Stack.Navigator>
   );
 }
@@ -44,17 +79,11 @@ function CreateStack() {
 function MoreStack() {
   return (
     <Stack.Navigator screenOptions={stackOptions}>
-      <Stack.Screen name="MoreHome" component={MoreScreen} options={{ title: 'More' }} />
-      <Stack.Screen name="Tasks" component={TaskListScreen} options={{ title: 'Tasks' }} />
-      <Stack.Screen name="TaskDetail" component={TaskDetailScreen} options={{ title: 'Task Detail' }} />
-      <Stack.Screen name="NewTask" component={NewTaskScreen} options={{ title: 'New Task' }} />
-      <Stack.Screen name="ProjectDetail" component={ProjectDetailScreen} options={{ title: 'Project Detail' }} />
-      <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: 'Calendar' }} />
-      <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event Detail' }} />
+      <Stack.Screen name="MoreHome" component={MoreScreen} options={{ title: 'Chronos Launchpad' }} />
       <Stack.Screen name="Habits" component={HabitsScreen} options={{ title: 'Habits' }} />
       <Stack.Screen name="HabitDetail" component={HabitDetailScreen} options={{ title: 'Habit Detail' }} />
-      <Stack.Screen name="Focus" component={FocusScreen} options={{ title: 'Focus' }} />
-      <Stack.Screen name="SessionActive" component={SessionActiveScreen} options={{ title: 'Session' }} />
+      <Stack.Screen name="Focus" component={FocusScreen} options={{ title: 'Focus Timer' }} />
+      <Stack.Screen name="SessionActive" component={SessionActiveScreen} options={{ title: 'Focus Reflection' }} />
       <Stack.Screen name="AI" component={AICopilotScreen} options={{ title: 'AI Copilot' }} />
       <Stack.Screen name="Insights" component={InsightsScreen} options={{ title: 'Insights' }} />
       <Stack.Screen name="WeeklyRecap" component={WeeklyRecapScreen} options={{ title: 'Weekly Recap' }} />
@@ -70,26 +99,12 @@ function CreateDockButton({ onPress }: { onPress?: (e: any) => void }) {
   return (
     <Pressable onPress={onPress} style={styles.createDockWrap}>
       <View style={styles.createDockButton}>
-        <Text style={styles.createDockPlus}>+</Text>
+        <Ionicons name="add" size={30} color={palette.white} />
       </View>
       <Text style={styles.createDockLabel}>Create</Text>
     </Pressable>
   );
 }
-
-const stackOptions = {
-  headerShadowVisible: false,
-  headerTitleStyle: {
-    color: palette.navy,
-    fontWeight: '700' as const
-  },
-  headerStyle: {
-    backgroundColor: palette.ash
-  },
-  contentStyle: {
-    backgroundColor: palette.ash
-  }
-};
 
 export function MainTabNavigator() {
   return (
@@ -98,33 +113,65 @@ export function MainTabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: palette.blue,
         tabBarInactiveTintColor: palette.pewter,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: styles.tabBarLabel,
         tabBarStyle: styles.tabBar
       }}
     >
       <Tab.Screen
-        name="Home"
-        component={HomeStack}
+        name="Today"
+        component={TodayStack}
         options={{
-          tabBarIcon: ({ color }) => <Text style={[styles.tabLabel, { color }]}>Home</Text>
+          tabBarLabel: 'Today',
+          tabBarIcon: ({ color, size }) => <Ionicons name="today-outline" size={size || 20} color={color} />
         }}
+      />
+      <Tab.Screen
+        name="TasksTab"
+        component={TasksStack}
+        options={{
+          tabBarLabel: 'Tasks',
+          tabBarIcon: ({ color, size }) => <Ionicons name="checkbox-outline" size={size || 20} color={color} />
+        }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('TasksTab', { screen: 'TaskList' });
+          },
+        })}
       />
       <Tab.Screen
         name="Create"
         component={CreateStack}
         options={{
+          tabBarLabel: '',
           tabBarButton: ({ onPress }) => <CreateDockButton onPress={onPress} />
         }}
+      />
+      <Tab.Screen
+        name="CalendarTab"
+        component={CalendarStack}
+        options={{
+          tabBarLabel: 'Calendar',
+          tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size || 20} color={color} />
+        }}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('CalendarTab', { screen: 'CalendarHome' });
+          },
+        })}
       />
       <Tab.Screen
         name="More"
         component={MoreStack}
         options={{
-          tabBarIcon: ({ color }) => <Text style={[styles.tabLabel, { color }]}>More</Text>
+          tabBarLabel: 'More',
+          tabBarIcon: ({ color, size }) => <Ionicons name="menu-outline" size={size || 20} color={color} />
         }}
         listeners={({ navigation }) => ({
           tabPress: (e) => {
-            // Reset nested stack to MoreHome when tab is clicked
+            e.preventDefault();
             navigation.navigate('More', { screen: 'MoreHome' });
           },
         })}
@@ -136,14 +183,15 @@ export function MainTabNavigator() {
 const styles = StyleSheet.create({
   tabBar: {
     height: 82,
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 12,
     backgroundColor: 'rgba(255,255,255,0.96)',
     borderTopColor: '#E8ECF4'
   },
-  tabLabel: {
-    fontSize: 14,
-    fontWeight: '600'
+  tabBarLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2
   },
   createDockWrap: {
     alignItems: 'center',
@@ -152,9 +200,9 @@ const styles = StyleSheet.create({
     width: 110
   },
   createDockButton: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: palette.blue,
     alignItems: 'center',
     justifyContent: 'center',
@@ -164,16 +212,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 6
   },
-  createDockPlus: {
-    color: palette.white,
-    fontSize: 30,
-    lineHeight: 30,
-    marginTop: -1
-  },
   createDockLabel: {
-    marginTop: 6,
+    marginTop: 4,
     color: palette.pewter,
-    fontSize: 12,
-    fontWeight: '600'
+    fontSize: 10,
+    fontWeight: '700'
   }
 });
